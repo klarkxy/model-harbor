@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, h, onMounted, ref } from "vue";
+import { computed, h, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NAlert,
   NButton,
@@ -17,7 +18,7 @@ import {
   NText,
   useMessage,
   type DataTableColumns,
-} from "naive-ui";
+} from 'naive-ui';
 import {
   consumerKeysApi,
   type AppSummary,
@@ -25,7 +26,7 @@ import {
   type ConsumerKeyAccessItem,
   type ModelGroup,
   type PublicModel,
-} from "../api/admin.js";
+} from '../api/admin.js';
 
 const props = defineProps<{
   app: AppSummary;
@@ -34,12 +35,13 @@ const props = defineProps<{
 }>();
 
 const message = useMessage();
+const { t } = useI18n();
 
 const items = ref<ConsumerKey[]>([]);
 const loading = ref(false);
 const createOpen = ref(false);
 const submitting = ref(false);
-const form = ref<{ name: string; access: string[] }>({ name: "", access: [] });
+const form = ref<{ name: string; access: string[] }>({ name: '', access: [] });
 const justCreated = ref<ConsumerKey | null>(null);
 
 async function refresh() {
@@ -57,25 +59,25 @@ async function refresh() {
 onMounted(refresh);
 
 function openCreate() {
-  form.value = { name: "", access: [] };
+  form.value = { name: '', access: [] };
   createOpen.value = true;
 }
 
 async function onCreate() {
   if (!form.value.name.trim()) {
-    message.error("Name is required");
+    message.error(t('consumerKeys.validation.required'));
     return;
   }
   submitting.value = true;
   try {
     const parsed: ConsumerKeyAccessItem[] = form.value.access
       .map((token) => {
-        const idx = token.indexOf(":");
+        const idx = token.indexOf(':');
         if (idx <= 0) return null;
         const type = token.slice(0, idx);
         const id = token.slice(idx + 1);
-        if (type === "group") return { targetType: "model_group" as const, targetId: id };
-        if (type === "model") return { targetType: "public_model" as const, targetId: id };
+        if (type === 'group') return { targetType: 'model_group' as const, targetId: id };
+        if (type === 'model') return { targetType: 'public_model' as const, targetId: id };
         return null;
       })
       .filter((x): x is ConsumerKeyAccessItem => x !== null);
@@ -86,7 +88,7 @@ async function onCreate() {
     items.value = [created, ...items.value];
     createOpen.value = false;
     justCreated.value = created;
-    message.success("Consumer key created");
+    message.success(t('consumerKeys.toast.created'));
   } catch (err) {
     message.error((err as Error).message);
   } finally {
@@ -98,7 +100,7 @@ async function revoke(row: ConsumerKey) {
   try {
     const updated = await consumerKeysApi.revoke(row.id);
     items.value = items.value.map((i) => (i.id === row.id ? updated : i));
-    message.success("Revoked");
+    message.success(t('consumerKeys.toast.revoked'));
   } catch (err) {
     message.error((err as Error).message);
   }
@@ -109,41 +111,47 @@ async function rotate(row: ConsumerKey) {
     const updated = await consumerKeysApi.rotate(row.id);
     items.value = items.value.map((i) => (i.id === row.id ? updated : i));
     justCreated.value = updated;
-    message.success("Rotated");
+    message.success(t('consumerKeys.toast.rotated'));
   } catch (err) {
     message.error((err as Error).message);
   }
 }
 
 const accessOptions = computed(() => [
-  ...props.modelGroups.map((g) => ({ label: `Group: ${g.name}`, value: `group:${g.id}` })),
-  ...props.publicModels.map((m) => ({ label: `Model: ${m.name}`, value: `model:${m.id}` })),
+  ...props.modelGroups.map((g) => ({
+    label: t('consumerKeys.modal.accessOptionGroup', { name: g.name }),
+    value: `group:${g.id}`,
+  })),
+  ...props.publicModels.map((m) => ({
+    label: t('consumerKeys.modal.accessOptionModel', { name: m.name }),
+    value: `model:${m.id}`,
+  })),
 ]);
 
 const columns = computed<DataTableColumns<ConsumerKey>>(() => [
-  { title: "Name", key: "name", width: 160 },
-  { title: "Prefix", key: "keyPrefix", width: 160 },
+  { title: t('consumerKeys.columns.name'), key: 'name', width: 160 },
+  { title: t('consumerKeys.columns.prefix'), key: 'keyPrefix', width: 160 },
   {
-    title: "Status",
-    key: "enabled",
+    title: t('consumerKeys.columns.status'),
+    key: 'enabled',
     width: 110,
     render: (row) =>
       !row.enabled
-        ? h(NTag, { type: "error", size: "small" }, () => "Revoked")
-        : h(NTag, { type: "success", size: "small" }, () => "Active"),
+        ? h(NTag, { type: 'error', size: 'small' }, () => t('consumerKeys.status.revoked'))
+        : h(NTag, { type: 'success', size: 'small' }, () => t('consumerKeys.status.active')),
   },
   {
-    title: "Actions",
-    key: "actions",
+    title: t('consumerKeys.columns.actions'),
+    key: 'actions',
     width: 200,
     render: (row) =>
-      h(NSpace, { size: "small" }, () => [
+      h(NSpace, { size: 'small' }, () => [
         h(
           NPopconfirm,
           { onPositiveClick: () => rotate(row) },
           {
-            trigger: () => h(NButton, { size: "small" }, () => "Rotate"),
-            default: () => "Rotate? The current key will stop working immediately.",
+            trigger: () => h(NButton, { size: 'small' }, () => t('consumerKeys.actions.rotate')),
+            default: () => t('consumerKeys.confirm.rotate'),
           },
         ),
         h(
@@ -151,12 +159,10 @@ const columns = computed<DataTableColumns<ConsumerKey>>(() => [
           { disabled: !row.enabled, onPositiveClick: () => revoke(row) },
           {
             trigger: () =>
-              h(
-                NButton,
-                { size: "small", type: "warning", disabled: !row.enabled },
-                () => "Revoke",
+              h(NButton, { size: 'small', type: 'warning', disabled: !row.enabled }, () =>
+                t('consumerKeys.actions.revoke'),
               ),
-            default: () => "Revoke this key?",
+            default: () => t('consumerKeys.confirm.revoke'),
           },
         ),
       ]),
@@ -171,8 +177,8 @@ function dismissJustCreated() {
 <template>
   <div>
     <NSpace align="center" justify="space-between" style="margin-bottom: 12px">
-      <NText depth="3">{{ items.length }} key(s)</NText>
-      <NButton type="primary" size="small" @click="openCreate">New consumer key</NButton>
+      <NText depth="3">{{ t('consumerKeys.keyCount', { count: items.length }) }}</NText>
+      <NButton type="primary" size="small" @click="openCreate">{{ t('consumerKeys.new') }}</NButton>
     </NSpace>
 
     <NDataTable
@@ -182,33 +188,38 @@ function dismissJustCreated() {
       :bordered="false"
       :single-line="false"
       :row-key="(row) => row.id"
-      :empty="h(NEmpty, { description: 'No consumer keys for this app' })"
+      :empty="h(NEmpty, { description: t('consumerKeys.empty') })"
     />
 
     <NModal
       :show="createOpen"
       preset="card"
       style="max-width: 560px"
-      title="New consumer key"
+      :title="t('consumerKeys.modal.createTitle')"
       @update:show="(v) => (createOpen = v)"
     >
       <NForm label-placement="top">
-        <NFormItem label="Name" required>
-          <NInput v-model:value="form.name" placeholder="Cline key" />
+        <NFormItem :label="t('consumerKeys.modal.name')" required>
+          <NInput
+            v-model:value="form.name"
+            :placeholder="t('consumerKeys.modal.placeholder.name')"
+          />
         </NFormItem>
-        <NFormItem label="Access">
+        <NFormItem :label="t('consumerKeys.modal.access')">
           <NSelect
             v-model:value="form.access"
             :options="accessOptions"
             multiple
-            placeholder="grant access to public models or model groups"
+            :placeholder="t('consumerKeys.modal.placeholder.access')"
           />
         </NFormItem>
       </NForm>
       <template #footer>
         <NSpace justify="end">
-          <NButton @click="createOpen = false">Cancel</NButton>
-          <NButton type="primary" :loading="submitting" @click="onCreate">Create</NButton>
+          <NButton @click="createOpen = false">{{ t('common.cancel') }}</NButton>
+          <NButton type="primary" :loading="submitting" @click="onCreate">{{
+            t('common.create')
+          }}</NButton>
         </NSpace>
       </template>
     </NModal>
@@ -217,15 +228,17 @@ function dismissJustCreated() {
       :show="justCreated !== null"
       preset="card"
       style="max-width: 640px"
-      title="Consumer key created"
+      :title="t('consumerKeys.createdModal.title')"
       @update:show="(v) => v || dismissJustCreated()"
     >
       <NAlert type="warning" :show-icon="false" style="margin-bottom: 12px">
-        Copy the raw key now. It will not be shown again.
+        {{ t('consumerKeys.createdModal.warning') }}
       </NAlert>
       <NCode v-if="justCreated" :code="justCreated.key ?? ''" language="text" />
       <NSpace justify="end" style="margin-top: 12px">
-        <NButton type="primary" @click="dismissJustCreated">I have saved it</NButton>
+        <NButton type="primary" @click="dismissJustCreated">{{
+          t('consumerKeys.createdModal.saved')
+        }}</NButton>
       </NSpace>
     </NModal>
   </div>

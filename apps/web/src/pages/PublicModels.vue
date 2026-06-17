@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, h, onMounted, ref } from "vue";
+import { computed, h, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NButton,
   NCard,
@@ -17,16 +18,17 @@ import {
   NPopconfirm,
   useMessage,
   type DataTableColumns,
-} from "naive-ui";
+} from 'naive-ui';
 import {
   publicModelsApi,
   upstreamKeysApi,
   type PublicModel,
   type PublicModelCreatePayload,
   type UpstreamKey,
-} from "../api/admin.js";
+} from '../api/admin.js';
 
 const message = useMessage();
+const { t } = useI18n();
 
 const items = ref<PublicModel[]>([]);
 const upstreamKeyOptions = ref<UpstreamKey[]>([]);
@@ -35,16 +37,18 @@ const drawerOpen = ref(false);
 const submitting = ref(false);
 
 const form = ref<PublicModelCreatePayload>({
-  name: "",
-  displayName: "",
-  description: "",
+  name: '',
+  displayName: '',
+  description: '',
   candidates: [],
 });
 
-const candidateRows = ref<Array<{ upstreamKeyId: string; realModelName: string; priority: number }>>([]);
+const candidateRows = ref<
+  Array<{ upstreamKeyId: string; realModelName: string; priority: number }>
+>([]);
 
 function resetForm() {
-  form.value = { name: "", displayName: "", description: "", candidates: [] };
+  form.value = { name: '', displayName: '', description: '', candidates: [] };
   candidateRows.value = [];
 }
 
@@ -70,12 +74,12 @@ function openCreate() {
 
 function addCandidate() {
   if (upstreamKeyOptions.value.length === 0) {
-    message.warning("Create an upstream key first");
+    message.warning(t('publicModels.toast.createUpstreamKeyFirst'));
     return;
   }
   candidateRows.value.push({
     upstreamKeyId: upstreamKeyOptions.value[0]!.id,
-    realModelName: "",
+    realModelName: '',
     priority: 100,
   });
 }
@@ -86,7 +90,7 @@ function removeCandidate(idx: number) {
 
 async function onSubmit() {
   if (!form.value.name) {
-    message.error("Name is required");
+    message.error(t('publicModels.validation.required'));
     return;
   }
   submitting.value = true;
@@ -106,7 +110,7 @@ async function onSubmit() {
     const created = await publicModelsApi.create(payload);
     items.value = [created, ...items.value];
     drawerOpen.value = false;
-    message.success("Public model created");
+    message.success(t('publicModels.toast.created'));
   } catch (err) {
     message.error((err as Error).message);
   } finally {
@@ -118,36 +122,37 @@ async function remove(row: PublicModel) {
   try {
     await publicModelsApi.remove(row.id);
     items.value = items.value.filter((i) => i.id !== row.id);
-    message.success("Deleted");
+    message.success(t('publicModels.toast.deleted'));
   } catch (err) {
     message.error((err as Error).message);
   }
 }
 
 const columns = computed<DataTableColumns<PublicModel>>(() => [
-  { title: "Name", key: "name", width: 220 },
-  { title: "Display name", key: "displayName", width: 200 },
-  { title: "Candidates", key: "candidateCount", width: 100 },
+  { title: t('publicModels.columns.name'), key: 'name', width: 220 },
+  { title: t('publicModels.columns.displayName'), key: 'displayName', width: 200 },
+  { title: t('publicModels.columns.candidates'), key: 'candidateCount', width: 100 },
   {
-    title: "Status",
-    key: "enabled",
+    title: t('publicModels.columns.status'),
+    key: 'enabled',
     width: 100,
     render: (row) =>
       row.enabled
-        ? h(NTag, { type: "success", size: "small" }, () => "Enabled")
-        : h(NTag, { type: "default", size: "small" }, () => "Disabled"),
+        ? h(NTag, { type: 'success', size: 'small' }, () => t('publicModels.status.enabled'))
+        : h(NTag, { type: 'default', size: 'small' }, () => t('publicModels.status.disabled')),
   },
   {
-    title: "Actions",
-    key: "actions",
+    title: t('publicModels.columns.actions'),
+    key: 'actions',
     width: 110,
     render: (row) =>
       h(
         NPopconfirm,
         { onPositiveClick: () => remove(row) },
         {
-          trigger: () => h(NButton, { size: "small", type: "error" }, () => "Delete"),
-          default: () => `Delete ${row.name}?`,
+          trigger: () =>
+            h(NButton, { size: 'small', type: 'error' }, () => t('publicModels.actions.delete')),
+          default: () => t('publicModels.confirm', { name: row.name }),
         },
       ),
   },
@@ -162,8 +167,8 @@ const keyOptions = computed(() =>
   <div class="page">
     <NCard>
       <NSpace align="center" justify="space-between" style="margin-bottom: 16px">
-        <NText strong>Public Models</NText>
-        <NButton type="primary" @click="openCreate">New public model</NButton>
+        <NText strong>{{ t('publicModels.title') }}</NText>
+        <NButton type="primary" @click="openCreate">{{ t('publicModels.new') }}</NButton>
       </NSpace>
 
       <NDataTable
@@ -173,46 +178,63 @@ const keyOptions = computed(() =>
         :bordered="false"
         :single-line="false"
         :row-key="(row) => row.id"
-        :empty="h(NEmpty, { description: 'No public models yet' })"
+        :empty="h(NEmpty, { description: t('publicModels.empty') })"
       />
     </NCard>
 
     <NDrawer v-model:show="drawerOpen" :width="560">
-      <NDrawerContent title="New public model" closable>
+      <NDrawerContent :title="t('publicModels.drawer.title')" closable>
         <NForm label-placement="top">
-          <NFormItem label="Name" required>
-            <NInput v-model:value="form.name" placeholder="ds-v4-flash" />
+          <NFormItem :label="t('publicModels.drawer.name')" required>
+            <NInput
+              v-model:value="form.name"
+              :placeholder="t('publicModels.drawer.placeholders.name')"
+            />
           </NFormItem>
-          <NFormItem label="Display name">
-            <NInput v-model:value="form.displayName" placeholder="DS V4 Flash" />
+          <NFormItem :label="t('publicModels.drawer.displayName')">
+            <NInput
+              v-model:value="form.displayName"
+              :placeholder="t('publicModels.drawer.placeholders.displayName')"
+            />
           </NFormItem>
-          <NFormItem label="Description">
+          <NFormItem :label="t('publicModels.drawer.description')">
             <NInput v-model:value="form.description" type="textarea" :rows="2" />
           </NFormItem>
-          <NFormItem label="Candidates">
+          <NFormItem :label="t('publicModels.drawer.candidates')">
             <NSpace vertical size="small" style="width: 100%">
               <div
                 v-for="(c, idx) in candidateRows"
                 :key="idx"
                 style="display: flex; gap: 8px; align-items: center"
               >
-                <NSelect v-model:value="c.upstreamKeyId" :options="keyOptions" style="flex: 1" placeholder="upstream key" />
+                <NSelect
+                  v-model:value="c.upstreamKeyId"
+                  :options="keyOptions"
+                  style="flex: 1"
+                  :placeholder="t('publicModels.drawer.placeholders.upstreamKey')"
+                />
                 <NInput
                   v-model:value="c.realModelName"
                   style="flex: 1"
-                  placeholder="real model name"
+                  :placeholder="t('publicModels.drawer.placeholders.realModelName')"
                 />
                 <NInputNumber v-model:value="c.priority" :min="0" style="width: 90px" />
-                <NButton size="small" type="error" tertiary @click="removeCandidate(idx)">×</NButton>
+                <NButton size="small" type="error" tertiary @click="removeCandidate(idx)"
+                  >×</NButton
+                >
               </div>
-              <NButton size="small" @click="addCandidate">+ Add candidate</NButton>
+              <NButton size="small" @click="addCandidate">{{
+                t('publicModels.drawer.addCandidate')
+              }}</NButton>
             </NSpace>
           </NFormItem>
         </NForm>
         <template #footer>
           <NSpace justify="end">
-            <NButton @click="drawerOpen = false">Cancel</NButton>
-            <NButton type="primary" :loading="submitting" @click="onSubmit">Create</NButton>
+            <NButton @click="drawerOpen = false">{{ t('common.cancel') }}</NButton>
+            <NButton type="primary" :loading="submitting" @click="onSubmit">{{
+              t('common.create')
+            }}</NButton>
           </NSpace>
         </template>
       </NDrawerContent>

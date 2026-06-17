@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, h, onMounted, ref } from "vue";
+import { computed, h, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NButton,
   NCard,
@@ -18,16 +19,17 @@ import {
   NPopconfirm,
   useMessage,
   type DataTableColumns,
-} from "naive-ui";
+} from 'naive-ui';
 import {
   modelGroupsApi,
   publicModelsApi,
   type ModelGroup,
   type ModelGroupCreatePayload,
   type PublicModel,
-} from "../api/admin.js";
+} from '../api/admin.js';
 
 const message = useMessage();
+const { t } = useI18n();
 
 const items = ref<ModelGroup[]>([]);
 const publicModelOptions = ref<PublicModel[]>([]);
@@ -35,11 +37,11 @@ const loading = ref(false);
 const drawerOpen = ref(false);
 const submitting = ref(false);
 
-const form = ref<ModelGroupCreatePayload>({ name: "", displayName: "", description: "" });
+const form = ref<ModelGroupCreatePayload>({ name: '', displayName: '', description: '' });
 const memberRows = ref<Array<{ publicModelId: string; priority: number }>>([]);
 
 function resetForm() {
-  form.value = { name: "", displayName: "", description: "" };
+  form.value = { name: '', displayName: '', description: '' };
   memberRows.value = [];
 }
 
@@ -65,7 +67,7 @@ function openCreate() {
 
 function addMember() {
   if (publicModelOptions.value.length === 0) {
-    message.warning("Create a public model first");
+    message.warning(t('modelGroups.toast.createPublicModelFirst'));
     return;
   }
   memberRows.value.push({
@@ -80,7 +82,7 @@ function removeMember(idx: number) {
 
 async function onSubmit() {
   if (!form.value.name) {
-    message.error("Name is required");
+    message.error(t('modelGroups.validation.required'));
     return;
   }
   submitting.value = true;
@@ -89,12 +91,15 @@ async function onSubmit() {
       name: form.value.name.trim(),
       displayName: form.value.displayName?.trim() || undefined,
       description: form.value.description?.trim() || undefined,
-      members: memberRows.value.map((m) => ({ publicModelId: m.publicModelId, priority: m.priority })),
+      members: memberRows.value.map((m) => ({
+        publicModelId: m.publicModelId,
+        priority: m.priority,
+      })),
     };
     const created = await modelGroupsApi.create(payload);
     items.value = [created, ...items.value];
     drawerOpen.value = false;
-    message.success("Model group created");
+    message.success(t('modelGroups.toast.created'));
   } catch (err) {
     message.error((err as Error).message);
   } finally {
@@ -106,37 +111,38 @@ async function remove(row: ModelGroup) {
   try {
     await modelGroupsApi.remove(row.id);
     items.value = items.value.filter((i) => i.id !== row.id);
-    message.success("Deleted");
+    message.success(t('modelGroups.toast.deleted'));
   } catch (err) {
     message.error((err as Error).message);
   }
 }
 
 const columns = computed<DataTableColumns<ModelGroup>>(() => [
-  { title: "Name", key: "name", width: 220 },
-  { title: "Display name", key: "displayName", width: 200 },
-  { title: "Policy", key: "routingPolicy", width: 100 },
-  { title: "Members", key: "memberCount", width: 100 },
+  { title: t('modelGroups.columns.name'), key: 'name', width: 220 },
+  { title: t('modelGroups.columns.displayName'), key: 'displayName', width: 200 },
+  { title: t('modelGroups.columns.policy'), key: 'routingPolicy', width: 100 },
+  { title: t('modelGroups.columns.members'), key: 'memberCount', width: 100 },
   {
-    title: "Status",
-    key: "enabled",
+    title: t('modelGroups.columns.status'),
+    key: 'enabled',
     width: 100,
     render: (row) =>
       row.enabled
-        ? h(NTag, { type: "success", size: "small" }, () => "Enabled")
-        : h(NTag, { type: "default", size: "small" }, () => "Disabled"),
+        ? h(NTag, { type: 'success', size: 'small' }, () => t('modelGroups.status.enabled'))
+        : h(NTag, { type: 'default', size: 'small' }, () => t('modelGroups.status.disabled')),
   },
   {
-    title: "Actions",
-    key: "actions",
+    title: t('modelGroups.columns.actions'),
+    key: 'actions',
     width: 110,
     render: (row) =>
       h(
         NPopconfirm,
         { onPositiveClick: () => remove(row) },
         {
-          trigger: () => h(NButton, { size: "small", type: "error" }, () => "Delete"),
-          default: () => `Delete ${row.name}?`,
+          trigger: () =>
+            h(NButton, { size: 'small', type: 'error' }, () => t('modelGroups.actions.delete')),
+          default: () => t('modelGroups.confirm', { name: row.name }),
         },
       ),
   },
@@ -151,8 +157,8 @@ const modelOptions = computed(() =>
   <div class="page">
     <NCard>
       <NSpace align="center" justify="space-between" style="margin-bottom: 16px">
-        <NText strong>Model Groups</NText>
-        <NButton type="primary" @click="openCreate">New model group</NButton>
+        <NText strong>{{ t('modelGroups.title') }}</NText>
+        <NButton type="primary" @click="openCreate">{{ t('modelGroups.new') }}</NButton>
       </NSpace>
 
       <NDataTable
@@ -162,23 +168,29 @@ const modelOptions = computed(() =>
         :bordered="false"
         :single-line="false"
         :row-key="(row) => row.id"
-        :empty="h(NEmpty, { description: 'No model groups yet' })"
+        :empty="h(NEmpty, { description: t('modelGroups.empty') })"
       />
     </NCard>
 
     <NDrawer v-model:show="drawerOpen" :width="520">
-      <NDrawerContent title="New model group" closable>
+      <NDrawerContent :title="t('modelGroups.drawer.title')" closable>
         <NForm label-placement="top">
-          <NFormItem label="Name" required>
-            <NInput v-model:value="form.name" placeholder="coding" />
+          <NFormItem :label="t('modelGroups.drawer.name')" required>
+            <NInput
+              v-model:value="form.name"
+              :placeholder="t('modelGroups.drawer.placeholders.name')"
+            />
           </NFormItem>
-          <NFormItem label="Display name">
-            <NInput v-model:value="form.displayName" placeholder="Coding" />
+          <NFormItem :label="t('modelGroups.drawer.displayName')">
+            <NInput
+              v-model:value="form.displayName"
+              :placeholder="t('modelGroups.drawer.placeholders.displayName')"
+            />
           </NFormItem>
-          <NFormItem label="Description">
+          <NFormItem :label="t('modelGroups.drawer.description')">
             <NInput v-model:value="form.description" type="textarea" :rows="2" />
           </NFormItem>
-          <NFormItem label="Members">
+          <NFormItem :label="t('modelGroups.drawer.members')">
             <NSpace vertical size="small" style="width: 100%">
               <div
                 v-for="(m, idx) in memberRows"
@@ -189,19 +201,23 @@ const modelOptions = computed(() =>
                   v-model:value="m.publicModelId"
                   :options="modelOptions"
                   style="flex: 1"
-                  placeholder="public model"
+                  :placeholder="t('modelGroups.drawer.placeholders.publicModel')"
                 />
                 <NInputNumber v-model:value="m.priority" :min="0" style="width: 90px" />
                 <NButton size="small" type="error" tertiary @click="removeMember(idx)">×</NButton>
               </div>
-              <NButton size="small" @click="addMember">+ Add member</NButton>
+              <NButton size="small" @click="addMember">{{
+                t('modelGroups.drawer.addMember')
+              }}</NButton>
             </NSpace>
           </NFormItem>
         </NForm>
         <template #footer>
           <NSpace justify="end">
-            <NButton @click="drawerOpen = false">Cancel</NButton>
-            <NButton type="primary" :loading="submitting" @click="onSubmit">Create</NButton>
+            <NButton @click="drawerOpen = false">{{ t('common.cancel') }}</NButton>
+            <NButton type="primary" :loading="submitting" @click="onSubmit">{{
+              t('common.create')
+            }}</NButton>
           </NSpace>
         </template>
       </NDrawerContent>

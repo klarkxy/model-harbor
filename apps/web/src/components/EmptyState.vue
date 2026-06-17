@@ -1,15 +1,20 @@
 <script setup lang="ts">
-import { NEmpty } from "naive-ui";
+import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { NEmpty } from 'naive-ui';
 
-defineProps<{
+const props = defineProps<{
   title: string;
   description?: string;
 }>();
+
+const { t } = useI18n();
+const description = computed(() => props.description ?? t('emptyState.description'));
 </script>
 
 <template>
   <div class="empty-state">
-    <NEmpty :description="description ?? 'M0 scaffold · content lands in later milestones'">
+    <NEmpty :description="description">
       <template #extra>
         <p>{{ title }}</p>
       </template>

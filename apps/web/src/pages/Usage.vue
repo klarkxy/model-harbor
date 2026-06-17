@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, h, onMounted, ref } from "vue";
+import { computed, h, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NButton,
   NCard,
@@ -12,7 +13,7 @@ import {
   NTag,
   NText,
   type DataTableColumns,
-} from "naive-ui";
+} from 'naive-ui';
 import {
   usageApi,
   type UsageBreakdownEntry,
@@ -20,14 +21,16 @@ import {
   type UsageTargetBreakdownEntry,
   type UsageTotals,
   type UsageWindow,
-} from "../api/admin.js";
+} from '../api/admin.js';
 
-const windowKind = ref<UsageWindow>("today");
-const windowOptions: Array<{ label: string; value: UsageWindow }> = [
-  { label: "Today", value: "today" },
-  { label: "24 hours", value: "24h" },
-  { label: "7 days", value: "7d" },
-];
+const { t } = useI18n();
+
+const windowKind = ref<UsageWindow>('today');
+const windowOptions = computed<Array<{ label: string; value: UsageWindow }>>(() => [
+  { label: t('usage.windows.today'), value: 'today' },
+  { label: t('usage.windows.24h'), value: '24h' },
+  { label: t('usage.windows.7d'), value: '7d' },
+]);
 
 const totals = ref<UsageTotals | null>(null);
 const apps = ref<UsageBreakdownEntry[]>([]);
@@ -43,7 +46,7 @@ async function refresh(): Promise<void> {
   lastError.value = null;
   try {
     const w = windowKind.value;
-    const [t, a, c, u, tg, r] = await Promise.all([
+    const [t2, a, c, u, tg, r] = await Promise.all([
       usageApi.totals(w),
       usageApi.byApp(w),
       usageApi.byConsumerKey(w),
@@ -51,7 +54,7 @@ async function refresh(): Promise<void> {
       usageApi.byTarget(w),
       usageApi.recent(100),
     ]);
-    totals.value = t;
+    totals.value = t2;
     apps.value = a.items;
     consumerKeys.value = c.items;
     upstreamKeys.value = u.items;
@@ -67,128 +70,129 @@ async function refresh(): Promise<void> {
 onMounted(refresh);
 
 const successRatePct = computed(() =>
-  totals.value ? `${(totals.value.successRate * 100).toFixed(1)}%` : "—",
+  totals.value ? `${(totals.value.successRate * 100).toFixed(1)}%` : '—',
 );
 const stickyHitRatePct = computed(() =>
-  totals.value ? `${(totals.value.stickyHitRate * 100).toFixed(1)}%` : "—",
+  totals.value ? `${(totals.value.stickyHitRate * 100).toFixed(1)}%` : '—',
 );
 
-const breakdownColumns: DataTableColumns<UsageBreakdownEntry> = [
-  { title: "Name", key: "name", ellipsis: { tooltip: true } },
+const breakdownColumns = computed<DataTableColumns<UsageBreakdownEntry>>(() => [
+  { title: t('usage.columns.name'), key: 'name', ellipsis: { tooltip: true } },
   {
-    title: "Requests",
-    key: "totalRequests",
+    title: t('usage.columns.requests'),
+    key: 'totalRequests',
     sorter: (a, b) => a.totalRequests - b.totalRequests,
-    defaultSortOrder: "descend",
+    defaultSortOrder: 'descend',
     render: (row) => row.totalRequests.toLocaleString(),
   },
   {
-    title: "Success",
-    key: "successfulRequests",
+    title: t('usage.columns.success'),
+    key: 'successfulRequests',
     render: (row) => row.successfulRequests.toLocaleString(),
   },
   {
-    title: "Errors",
-    key: "failedRequests",
+    title: t('usage.columns.errors'),
+    key: 'failedRequests',
     render: (row) =>
-      h(
-        NTag,
-        { size: "small", type: row.failedRequests > 0 ? "error" : "default" },
-        () => row.failedRequests.toLocaleString(),
+      h(NTag, { size: 'small', type: row.failedRequests > 0 ? 'error' : 'default' }, () =>
+        row.failedRequests.toLocaleString(),
       ),
   },
   {
-    title: "Tokens (in/out)",
-    key: "tokens",
+    title: t('usage.columns.tokensInOut'),
+    key: 'tokens',
     render: (row) => `${row.inputTokens.toLocaleString()} / ${row.outputTokens.toLocaleString()}`,
   },
-];
+]);
 
-const targetColumns: DataTableColumns<UsageTargetBreakdownEntry> = [
-  { title: "Name", key: "name", ellipsis: { tooltip: true } },
+const targetColumns = computed<DataTableColumns<UsageTargetBreakdownEntry>>(() => [
+  { title: t('usage.columns.name'), key: 'name', ellipsis: { tooltip: true } },
   {
-    title: "Type",
-    key: "targetType",
+    title: t('usage.columns.type'),
+    key: 'targetType',
     width: 120,
     render: (row) =>
       h(
         NTag,
-        { size: "small", type: row.targetType === "public_model" ? "info" : "success" },
-        () => (row.targetType === "public_model" ? "public model" : "model group"),
+        { size: 'small', type: row.targetType === 'public_model' ? 'info' : 'success' },
+        () =>
+          row.targetType === 'public_model'
+            ? t('common.targetType.publicModel')
+            : t('common.targetType.modelGroup'),
       ),
   },
   {
-    title: "Requests",
-    key: "totalRequests",
+    title: t('usage.columns.requests'),
+    key: 'totalRequests',
     sorter: (a, b) => a.totalRequests - b.totalRequests,
-    defaultSortOrder: "descend",
+    defaultSortOrder: 'descend',
     render: (row) => row.totalRequests.toLocaleString(),
   },
   {
-    title: "Errors",
-    key: "failedRequests",
+    title: t('usage.columns.errors'),
+    key: 'failedRequests',
     render: (row) => row.failedRequests.toLocaleString(),
   },
   {
-    title: "Tokens (in/out)",
-    key: "tokens",
+    title: t('usage.columns.tokensInOut'),
+    key: 'tokens',
     render: (row) => `${row.inputTokens.toLocaleString()} / ${row.outputTokens.toLocaleString()}`,
   },
-];
+]);
 
-const recentColumns: DataTableColumns<UsageRecentRow> = [
+const recentColumns = computed<DataTableColumns<UsageRecentRow>>(() => [
   {
-    title: "Time",
-    key: "createdAt",
+    title: t('usage.columns.time'),
+    key: 'createdAt',
     width: 200,
     render: (row) => new Date(row.createdAt).toLocaleString(),
   },
-  { title: "App", key: "appId", width: 140, ellipsis: { tooltip: true } },
+  { title: t('usage.columns.app'), key: 'appId', width: 140, ellipsis: { tooltip: true } },
   {
-    title: "Target",
-    key: "requestedTargetName",
+    title: t('usage.columns.target'),
+    key: 'requestedTargetName',
     width: 200,
     ellipsis: { tooltip: true },
   },
   {
-    title: "Upstream",
-    key: "realModelName",
+    title: t('usage.columns.upstream'),
+    key: 'realModelName',
     width: 200,
     ellipsis: { tooltip: true },
   },
   {
-    title: "Status",
-    key: "status",
+    title: t('usage.columns.status'),
+    key: 'status',
     width: 110,
     render: (row) =>
       h(
         NTag,
-        { size: "small", type: row.status === "success" ? "success" : "error" },
+        { size: 'small', type: row.status === 'success' ? 'success' : 'error' },
         () => row.status,
       ),
   },
   {
-    title: "Latency",
-    key: "latencyMs",
+    title: t('usage.columns.latency'),
+    key: 'latencyMs',
     width: 110,
     render: (row) => `${row.latencyMs} ms`,
   },
   {
-    title: "Tokens (in/out/total)",
-    key: "tokens",
+    title: t('usage.columns.tokensInOutTotal'),
+    key: 'tokens',
     width: 180,
     render: (row) =>
       row.totalTokens === null
-        ? "—"
+        ? '—'
         : `${row.inputTokens ?? 0} / ${row.outputTokens ?? 0} / ${row.totalTokens}`,
   },
   {
-    title: "Error",
-    key: "errorCode",
+    title: t('usage.columns.error'),
+    key: 'errorCode',
     width: 160,
-    render: (row) => (row.errorCode ? row.errorCode : "—"),
+    render: (row) => (row.errorCode ? row.errorCode : '—'),
   },
-];
+]);
 </script>
 
 <template>
@@ -196,40 +200,42 @@ const recentColumns: DataTableColumns<UsageRecentRow> = [
     <NSpace vertical size="large">
       <NCard>
         <NSpace align="center" justify="space-between" style="margin-bottom: 12px">
-          <NText strong>Usage overview</NText>
+          <NText strong>{{ t('usage.title') }}</NText>
           <NSpace>
             <NButton
               v-for="opt in windowOptions"
               :key="opt.value"
               :type="windowKind === opt.value ? 'primary' : 'default'"
               size="small"
-              @click="(windowKind = opt.value), refresh()"
+              @click="((windowKind = opt.value), refresh())"
             >
               {{ opt.label }}
             </NButton>
-            <NButton size="small" :loading="loading" @click="refresh">Refresh</NButton>
+            <NButton size="small" :loading="loading" @click="refresh">{{
+              t('usage.refresh')
+            }}</NButton>
           </NSpace>
         </NSpace>
         <NGrid :cols="4" :x-gap="16" :y-gap="16" responsive="screen">
           <NGi :span="1">
             <NCard>
-              <NStatistic label="Requests" :value="totals?.totalRequests ?? 0" />
+              <NStatistic :label="t('usage.stats.requests')" :value="totals?.totalRequests ?? 0" />
             </NCard>
           </NGi>
           <NGi :span="1">
             <NCard>
-              <NStatistic label="Success rate" :value="successRatePct" />
+              <NStatistic :label="t('usage.stats.successRate')" :value="successRatePct" />
             </NCard>
           </NGi>
           <NGi :span="1">
             <NCard>
-              <NStatistic label="Sticky hit rate" :value="stickyHitRatePct" />
+              <NStatistic :label="t('usage.stats.stickyHitRate')" :value="stickyHitRatePct" />
             </NCard>
           </NGi>
           <NGi :span="1">
             <NCard>
               <NStatistic
-                label="Tokens (in / out)"
+                :label="t('usage.stats.tokens')"
                 :value="`${(totals?.inputTokens ?? 0).toLocaleString()} / ${(totals?.outputTokens ?? 0).toLocaleString()}`"
               />
             </NCard>
@@ -237,51 +243,51 @@ const recentColumns: DataTableColumns<UsageRecentRow> = [
         </NGrid>
       </NCard>
 
-      <NCard title="By app">
+      <NCard :title="t('usage.byApp')">
         <NDataTable
           :columns="breakdownColumns"
           :data="apps"
           :bordered="false"
           :single-line="false"
           :row-key="(r) => r.id"
-          :empty="h(NEmpty, { description: 'No app traffic in this window' })"
+          :empty="h(NEmpty, { description: t('usage.empty.app') })"
         />
       </NCard>
 
-      <NCard title="By consumer key">
+      <NCard :title="t('usage.byConsumerKey')">
         <NDataTable
           :columns="breakdownColumns"
           :data="consumerKeys"
           :bordered="false"
           :single-line="false"
           :row-key="(r) => r.id"
-          :empty="h(NEmpty, { description: 'No consumer key traffic in this window' })"
+          :empty="h(NEmpty, { description: t('usage.empty.consumerKey') })"
         />
       </NCard>
 
-      <NCard title="By upstream key">
+      <NCard :title="t('usage.byUpstreamKey')">
         <NDataTable
           :columns="breakdownColumns"
           :data="upstreamKeys"
           :bordered="false"
           :single-line="false"
           :row-key="(r) => r.id"
-          :empty="h(NEmpty, { description: 'No upstream traffic in this window' })"
+          :empty="h(NEmpty, { description: t('usage.empty.upstreamKey') })"
         />
       </NCard>
 
-      <NCard title="By target">
+      <NCard :title="t('usage.byTarget')">
         <NDataTable
           :columns="targetColumns"
           :data="targets"
           :bordered="false"
           :single-line="false"
           :row-key="(r) => `${r.targetType}:${r.id}`"
-          :empty="h(NEmpty, { description: 'No target traffic in this window' })"
+          :empty="h(NEmpty, { description: t('usage.empty.target') })"
         />
       </NCard>
 
-      <NCard title="Recent requests">
+      <NCard :title="t('usage.recentRequests')">
         <NDataTable
           :columns="recentColumns"
           :data="recent"
@@ -289,11 +295,13 @@ const recentColumns: DataTableColumns<UsageRecentRow> = [
           :single-line="false"
           :row-key="(r) => r.id"
           :max-height="480"
-          :empty="h(NEmpty, { description: 'No gateway traffic yet' })"
+          :empty="h(NEmpty, { description: t('usage.empty.recent') })"
         />
       </NCard>
 
-      <NText v-if="lastError" type="error">Failed to load: {{ lastError }}</NText>
+      <NText v-if="lastError" type="error">{{
+        t('usage.loadError', { message: lastError })
+      }}</NText>
     </NSpace>
   </div>
 </template>

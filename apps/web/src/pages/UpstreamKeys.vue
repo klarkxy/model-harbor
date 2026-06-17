@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, h, onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
+import { computed, h, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import {
   NButton,
   NCard,
@@ -19,15 +20,12 @@ import {
   NPopconfirm,
   useMessage,
   type DataTableColumns,
-} from "naive-ui";
-import {
-  upstreamKeysApi,
-  type UpstreamKey,
-  type UpstreamKeyCreatePayload,
-} from "../api/admin.js";
+} from 'naive-ui';
+import { upstreamKeysApi, type UpstreamKey, type UpstreamKeyCreatePayload } from '../api/admin.js';
 
 const router = useRouter();
 const message = useMessage();
+const { t } = useI18n();
 
 const items = ref<UpstreamKey[]>([]);
 const loading = ref(false);
@@ -35,25 +33,25 @@ const drawerOpen = ref(false);
 const submitting = ref(false);
 
 const form = ref<UpstreamKeyCreatePayload>({
-  name: "",
-  providerType: "anthropic_compatible",
-  baseUrl: "",
-  apiKey: "",
+  name: '',
+  providerType: 'anthropic_compatible',
+  baseUrl: '',
+  apiKey: '',
   supportedModels: [],
-  quota: { period: "month" },
+  quota: { period: 'month' },
 });
-const supportedModelsText = ref("");
+const supportedModelsText = ref('');
 
 function resetForm() {
   form.value = {
-    name: "",
-    providerType: "anthropic_compatible",
-    baseUrl: "",
-    apiKey: "",
+    name: '',
+    providerType: 'anthropic_compatible',
+    baseUrl: '',
+    apiKey: '',
     supportedModels: [],
-    quota: { period: "month" },
+    quota: { period: 'month' },
   };
-  supportedModelsText.value = "";
+  supportedModelsText.value = '';
 }
 
 async function refresh() {
@@ -77,7 +75,7 @@ function openCreate() {
 
 async function onSubmit() {
   if (!form.value.name || !form.value.baseUrl || !form.value.apiKey) {
-    message.error("Name, base URL, and API key are required");
+    message.error(t('upstreamKeys.validation.required'));
     return;
   }
   submitting.value = true;
@@ -92,7 +90,10 @@ async function onSubmit() {
     };
     const quota = payload.quota;
     const hasAnyQuotaLimit = Boolean(
-      quota?.requestLimit || quota?.inputTokenLimit || quota?.outputTokenLimit || quota?.totalTokenLimit,
+      quota?.requestLimit ||
+      quota?.inputTokenLimit ||
+      quota?.outputTokenLimit ||
+      quota?.totalTokenLimit,
     );
     if (!hasAnyQuotaLimit) {
       payload.quota = undefined;
@@ -100,7 +101,7 @@ async function onSubmit() {
     const created = await upstreamKeysApi.create(payload);
     items.value = [created, ...items.value];
     drawerOpen.value = false;
-    message.success("Upstream key created");
+    message.success(t('upstreamKeys.toast.created'));
   } catch (err) {
     message.error((err as Error).message);
   } finally {
@@ -112,10 +113,12 @@ async function toggleFreeze(row: UpstreamKey) {
   try {
     if (row.frozen) {
       const res = await upstreamKeysApi.unfreeze(row.id);
-      message.success(res.frozen ? "Frozen" : "Unfrozen");
+      message.success(
+        res.frozen ? t('upstreamKeys.toast.frozen') : t('upstreamKeys.toast.unfrozen'),
+      );
     } else {
-      await upstreamKeysApi.freeze(row.id, "manual freeze");
-      message.success("Frozen");
+      await upstreamKeysApi.freeze(row.id, 'manual freeze');
+      message.success(t('upstreamKeys.toast.frozen'));
     }
     await refresh();
   } catch (err) {
@@ -123,44 +126,61 @@ async function toggleFreeze(row: UpstreamKey) {
   }
 }
 
+const providerOptions = computed(() => [
+  { label: t('upstreamKeys.drawer.providers.anthropic'), value: 'anthropic_compatible' },
+  { label: t('upstreamKeys.drawer.providers.openai'), value: 'openai_compatible' },
+]);
+
+const periodOptions = computed(() => [
+  { label: t('common.period.hour'), value: 'hour' },
+  { label: t('common.period.day'), value: 'day' },
+  { label: t('common.period.week'), value: 'week' },
+  { label: t('common.period.month'), value: 'month' },
+  { label: t('common.period.total'), value: 'total' },
+]);
+
 const columns = computed<DataTableColumns<UpstreamKey>>(() => [
-  { title: "Name", key: "name", fixed: "left", width: 200 },
+  { title: t('upstreamKeys.columns.name'), key: 'name', fixed: 'left', width: 200 },
   {
-    title: "Provider",
-    key: "providerType",
+    title: t('upstreamKeys.columns.provider'),
+    key: 'providerType',
     width: 180,
-    render: (row) => h(NTag, { type: "info", size: "small" }, () => row.providerType),
+    render: (row) => h(NTag, { type: 'info', size: 'small' }, () => row.providerType),
   },
-  { title: "Base URL", key: "baseUrl", ellipsis: { tooltip: true } },
-  { title: "Models", key: "supportedModels", width: 80, render: (row) => String(row.supportedModels.length) },
+  { title: t('upstreamKeys.columns.baseUrl'), key: 'baseUrl', ellipsis: { tooltip: true } },
   {
-    title: "Status",
-    key: "status",
+    title: t('upstreamKeys.columns.models'),
+    key: 'supportedModels',
+    width: 80,
+    render: (row) => String(row.supportedModels.length),
+  },
+  {
+    title: t('upstreamKeys.columns.status'),
+    key: 'status',
     width: 110,
     render: (row) =>
       row.frozen
-        ? h(NTag, { type: "warning", size: "small" }, () => "Frozen")
+        ? h(NTag, { type: 'warning', size: 'small' }, () => t('upstreamKeys.status.frozen'))
         : row.enabled
-          ? h(NTag, { type: "success", size: "small" }, () => "Active")
-          : h(NTag, { type: "default", size: "small" }, () => "Disabled"),
+          ? h(NTag, { type: 'success', size: 'small' }, () => t('upstreamKeys.status.active'))
+          : h(NTag, { type: 'default', size: 'small' }, () => t('upstreamKeys.status.disabled')),
   },
   {
-    title: "Actions",
-    key: "actions",
+    title: t('upstreamKeys.columns.actions'),
+    key: 'actions',
     width: 180,
     render: (row) =>
-      h(NSpace, { size: "small" }, () => [
+      h(NSpace, { size: 'small' }, () => [
         h(
           NPopconfirm,
           { onPositiveClick: () => toggleFreeze(row) },
           {
             trigger: () =>
-              h(
-                NButton,
-                { size: "small", type: row.frozen ? "primary" : "warning" },
-                () => (row.frozen ? "Unfreeze" : "Freeze"),
+              h(NButton, { size: 'small', type: row.frozen ? 'primary' : 'warning' }, () =>
+                row.frozen ? t('upstreamKeys.actions.unfreeze') : t('upstreamKeys.actions.freeze'),
               ),
-            default: () => (row.frozen ? "Unfreeze this key?" : "Freeze this key?"),
+            default: () =>
+              row.frozen ? t('upstreamKeys.confirm.unfreeze') : t('upstreamKeys.confirm.freeze'),
           },
         ),
       ]),
@@ -172,8 +192,8 @@ const columns = computed<DataTableColumns<UpstreamKey>>(() => [
   <div class="page">
     <NCard>
       <NSpace align="center" justify="space-between" style="margin-bottom: 16px">
-        <NText strong>Upstream Keys</NText>
-        <NButton type="primary" @click="openCreate">New upstream key</NButton>
+        <NText strong>{{ t('upstreamKeys.title') }}</NText>
+        <NButton type="primary" @click="openCreate">{{ t('upstreamKeys.new') }}</NButton>
       </NSpace>
 
       <NDataTable
@@ -183,73 +203,82 @@ const columns = computed<DataTableColumns<UpstreamKey>>(() => [
         :bordered="false"
         :single-line="false"
         :row-key="(row) => row.id"
-        :empty="h(NEmpty, { description: 'No upstream keys yet' })"
+        :empty="h(NEmpty, { description: t('upstreamKeys.empty') })"
       />
     </NCard>
 
     <NDrawer v-model:show="drawerOpen" :width="480">
-      <NDrawerContent title="New upstream key" closable>
+      <NDrawerContent :title="t('upstreamKeys.drawer.title')" closable>
         <NForm label-placement="top">
-          <NFormItem label="Name" required>
-            <NInput v-model:value="form.name" placeholder="DeepSeek key 1" />
-          </NFormItem>
-          <NFormItem label="Provider" required>
-            <NSelect
-              v-model:value="form.providerType"
-              :options="[
-                { label: 'Anthropic compatible', value: 'anthropic_compatible' },
-                { label: 'OpenAI compatible', value: 'openai_compatible' },
-              ]"
+          <NFormItem :label="t('upstreamKeys.drawer.name')" required>
+            <NInput
+              v-model:value="form.name"
+              :placeholder="t('upstreamKeys.drawer.placeholders.name')"
             />
           </NFormItem>
-          <NFormItem label="Base URL" required>
-            <NInput v-model:value="form.baseUrl" placeholder="https://api.example.com" />
+          <NFormItem :label="t('upstreamKeys.drawer.provider')" required>
+            <NSelect v-model:value="form.providerType" :options="providerOptions" />
           </NFormItem>
-          <NFormItem label="API key" required>
+          <NFormItem :label="t('upstreamKeys.drawer.baseUrl')" required>
+            <NInput
+              v-model:value="form.baseUrl"
+              :placeholder="t('upstreamKeys.drawer.placeholders.baseUrl')"
+            />
+          </NFormItem>
+          <NFormItem :label="t('upstreamKeys.drawer.apiKey')" required>
             <NInput
               v-model:value="form.apiKey"
               type="password"
               show-password-on="click"
-              placeholder="sk-..."
+              :placeholder="t('upstreamKeys.drawer.placeholders.apiKey')"
             />
           </NFormItem>
-          <NFormItem label="Supported models (comma or newline separated)">
+          <NFormItem :label="t('upstreamKeys.drawer.supportedModels')">
             <NInput
               v-model:value="supportedModelsText"
               type="textarea"
               :rows="3"
-              placeholder="ds-v4-flash, ds-v4-pro"
+              :placeholder="t('upstreamKeys.drawer.placeholders.supportedModels')"
             />
           </NFormItem>
-          <NFormItem label="Quota period">
-            <NSelect
-              v-model:value="form.quota!.period"
-              :options="[
-                { label: 'Hour', value: 'hour' },
-                { label: 'Day', value: 'day' },
-                { label: 'Week', value: 'week' },
-                { label: 'Month', value: 'month' },
-                { label: 'Total', value: 'total' },
-              ]"
+          <NFormItem :label="t('upstreamKeys.drawer.quotaPeriod')">
+            <NSelect v-model:value="form.quota!.period" :options="periodOptions" />
+          </NFormItem>
+          <NFormItem :label="t('upstreamKeys.drawer.requestLimit')">
+            <NInputNumber
+              v-model:value="form.quota!.requestLimit"
+              :min="0"
+              :placeholder="t('common.optional')"
             />
           </NFormItem>
-          <NFormItem label="Request limit">
-            <NInputNumber v-model:value="form.quota!.requestLimit" :min="0" placeholder="optional" />
+          <NFormItem :label="t('upstreamKeys.drawer.inputTokenLimit')">
+            <NInputNumber
+              v-model:value="form.quota!.inputTokenLimit"
+              :min="0"
+              :placeholder="t('common.optional')"
+            />
           </NFormItem>
-          <NFormItem label="Input token limit">
-            <NInputNumber v-model:value="form.quota!.inputTokenLimit" :min="0" placeholder="optional" />
+          <NFormItem :label="t('upstreamKeys.drawer.outputTokenLimit')">
+            <NInputNumber
+              v-model:value="form.quota!.outputTokenLimit"
+              :min="0"
+              :placeholder="t('common.optional')"
+            />
           </NFormItem>
-          <NFormItem label="Output token limit">
-            <NInputNumber v-model:value="form.quota!.outputTokenLimit" :min="0" placeholder="optional" />
-          </NFormItem>
-          <NFormItem label="Total token limit">
-            <NInputNumber v-model:value="form.quota!.totalTokenLimit" :min="0" placeholder="optional" />
+          <NFormItem :label="t('upstreamKeys.drawer.totalTokenLimit')">
+            <NInputNumber
+              v-model:value="form.quota!.totalTokenLimit"
+              :min="0"
+              :placeholder="t('common.optional')"
+            />
           </NFormItem>
         </NForm>
         <template #footer>
           <NSpace justify="end">
-            <NButton @click="drawerOpen = false">Cancel</NButton>
-            <NButton type="primary" :loading="submitting" @click="onSubmit">Create</NButton>
+            <NButton @click="drawerOpen = false">{{ t('common.cancel') }}</NButton>
+            <NButton type="primary" :loading="submitting" @click="onSubmit">{{
+              t('common.create')
+            }}</NButton>
           </NSpace>
         </template>
       </NDrawerContent>

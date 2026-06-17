@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, h, onMounted, ref } from "vue";
+import { computed, h, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NButton,
   NCard,
@@ -15,7 +16,7 @@ import {
   NText,
   useMessage,
   type DataTableColumns,
-} from "naive-ui";
+} from 'naive-ui';
 import {
   appsApi,
   modelGroupsApi,
@@ -23,10 +24,11 @@ import {
   type AppSummary,
   type ModelGroup,
   type PublicModel,
-} from "../api/admin.js";
-import AppConsumerKeys from "../components/AppConsumerKeys.vue";
+} from '../api/admin.js';
+import AppConsumerKeys from '../components/AppConsumerKeys.vue';
 
 const message = useMessage();
+const { t } = useI18n();
 
 const items = ref<AppSummary[]>([]);
 const publicModels = ref<PublicModel[]>([]);
@@ -34,7 +36,7 @@ const modelGroups = ref<ModelGroup[]>([]);
 const loading = ref(false);
 const drawerOpen = ref(false);
 const submitting = ref(false);
-const form = ref<{ name: string; description: string }>({ name: "", description: "" });
+const form = ref<{ name: string; description: string }>({ name: '', description: '' });
 
 async function refresh() {
   loading.value = true;
@@ -57,13 +59,13 @@ async function refresh() {
 onMounted(refresh);
 
 function openCreate() {
-  form.value = { name: "", description: "" };
+  form.value = { name: '', description: '' };
   drawerOpen.value = true;
 }
 
 async function onSubmit() {
   if (!form.value.name.trim()) {
-    message.error("Name is required");
+    message.error(t('apps.validation.required'));
     return;
   }
   submitting.value = true;
@@ -74,7 +76,7 @@ async function onSubmit() {
     });
     items.value = [created, ...items.value];
     drawerOpen.value = false;
-    message.success("App created");
+    message.success(t('apps.toast.created'));
   } catch (err) {
     message.error((err as Error).message);
   } finally {
@@ -83,18 +85,18 @@ async function onSubmit() {
 }
 
 const columns = computed<DataTableColumns<AppSummary>>(() => [
-  { title: "Name", key: "name", width: 220 },
-  { title: "Description", key: "description", ellipsis: { tooltip: true } },
+  { title: t('apps.columns.name'), key: 'name', width: 220 },
+  { title: t('apps.columns.description'), key: 'description', ellipsis: { tooltip: true } },
   {
-    title: "Status",
-    key: "enabled",
+    title: t('apps.columns.status'),
+    key: 'enabled',
     width: 100,
     render: (row) =>
       row.enabled
-        ? h(NTag, { type: "success", size: "small" }, () => "Enabled")
-        : h(NTag, { type: "default", size: "small" }, () => "Disabled"),
+        ? h(NTag, { type: 'success', size: 'small' }, () => t('apps.status.enabled'))
+        : h(NTag, { type: 'default', size: 'small' }, () => t('apps.status.disabled')),
   },
-  { title: "Created", key: "createdAt", width: 200 },
+  { title: t('apps.columns.created'), key: 'createdAt', width: 200 },
 ]);
 </script>
 
@@ -102,8 +104,8 @@ const columns = computed<DataTableColumns<AppSummary>>(() => [
   <div class="page">
     <NCard>
       <NSpace align="center" justify="space-between" style="margin-bottom: 16px">
-        <NText strong>Apps</NText>
-        <NButton type="primary" @click="openCreate">New app</NButton>
+        <NText strong>{{ t('apps.title') }}</NText>
+        <NButton type="primary" @click="openCreate">{{ t('apps.new') }}</NButton>
       </NSpace>
       <NDataTable
         :columns="columns"
@@ -112,32 +114,35 @@ const columns = computed<DataTableColumns<AppSummary>>(() => [
         :bordered="false"
         :single-line="false"
         :row-key="(row) => row.id"
-        :empty="h(NEmpty, { description: 'No apps yet' })"
+        :empty="h(NEmpty, { description: t('apps.empty') })"
       />
     </NCard>
 
-    <NCard v-for="app in items" :key="app.id" :title="`Consumer keys · ${app.name}`" style="margin-top: 16px">
-      <AppConsumerKeys
-        :app="app"
-        :public-models="publicModels"
-        :model-groups="modelGroups"
-      />
+    <NCard
+      v-for="app in items"
+      :key="app.id"
+      :title="t('apps.consumerKeysTitle', { name: app.name })"
+      style="margin-top: 16px"
+    >
+      <AppConsumerKeys :app="app" :public-models="publicModels" :model-groups="modelGroups" />
     </NCard>
 
     <NDrawer v-model:show="drawerOpen" :width="420">
-      <NDrawerContent title="New app" closable>
+      <NDrawerContent :title="t('apps.drawer.title')" closable>
         <NForm label-placement="top">
-          <NFormItem label="Name" required>
-            <NInput v-model:value="form.name" placeholder="Local IDE" />
+          <NFormItem :label="t('apps.drawer.name')" required>
+            <NInput v-model:value="form.name" :placeholder="t('apps.drawer.placeholders.name')" />
           </NFormItem>
-          <NFormItem label="Description">
+          <NFormItem :label="t('apps.drawer.description')">
             <NInput v-model:value="form.description" type="textarea" :rows="2" />
           </NFormItem>
         </NForm>
         <template #footer>
           <NSpace justify="end">
-            <NButton @click="drawerOpen = false">Cancel</NButton>
-            <NButton type="primary" :loading="submitting" @click="onSubmit">Create</NButton>
+            <NButton @click="drawerOpen = false">{{ t('common.cancel') }}</NButton>
+            <NButton type="primary" :loading="submitting" @click="onSubmit">{{
+              t('common.create')
+            }}</NButton>
           </NSpace>
         </template>
       </NDrawerContent>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref } from 'vue';
 import {
   NLayout,
   NLayoutHeader,
@@ -9,44 +9,60 @@ import {
   NText,
   NSpace,
   NDropdown,
+  NSelect,
   type MenuOption,
-} from "naive-ui";
-import { RouterView, useRoute, useRouter } from "vue-router";
-import { useAuthStore } from "../stores/auth.js";
+} from 'naive-ui';
+import { RouterView, useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
+import { useAuthStore } from '../stores/auth.js';
+import { localeOptions, saveLocale, type SupportedLocale } from '../i18n/index.js';
 
 const route = useRoute();
 const router = useRouter();
+const { t, locale } = useI18n();
 const collapsed = ref(false);
 const auth = useAuthStore();
 
 const menuOptions = computed<MenuOption[]>(() => [
-  { key: "overview", label: "Overview" },
-  { key: "upstream-keys", label: "Upstream Keys" },
-  { key: "public-models", label: "Public Models" },
-  { key: "model-groups", label: "Model Groups" },
-  { key: "apps", label: "Apps" },
-  { key: "usage", label: "Usage" },
-  { key: "settings", label: "Settings" },
+  { key: 'overview', label: t('layout.menu.overview') },
+  { key: 'upstream-keys', label: t('layout.menu.upstreamKeys') },
+  { key: 'public-models', label: t('layout.menu.publicModels') },
+  { key: 'model-groups', label: t('layout.menu.modelGroups') },
+  { key: 'apps', label: t('layout.menu.apps') },
+  { key: 'usage', label: t('layout.menu.usage') },
+  { key: 'settings', label: t('layout.menu.settings') },
 ]);
 
-const activeKey = computed<string>(() => (typeof route.name === "string" ? route.name : "overview"));
+const activeKey = computed<string>(() =>
+  typeof route.name === 'string' ? route.name : 'overview',
+);
 
 function onMenuSelect(key: string): void {
   void router.push({ name: key });
 }
 
-const userLabel = computed(() => auth.user?.displayName || auth.user?.username || "—");
+const userLabel = computed(() => auth.user?.displayName || auth.user?.username || '—');
 
-const userOptions = computed(() => [
-  { key: "logout", label: "Sign out" },
-]);
+const userOptions = computed(() => [{ key: 'logout', label: t('layout.user.signOut') }]);
 
 async function onUserMenu(key: string): Promise<void> {
-  if (key === "logout") {
+  if (key === 'logout') {
     await auth.logout();
-    await router.push({ name: "login" });
+    await router.push({ name: 'login' });
   }
 }
+
+const currentLanguage = computed({
+  get: () => locale.value as SupportedLocale,
+  set: (value: SupportedLocale) => {
+    locale.value = value;
+    saveLocale(value);
+  },
+});
+
+const languageOptions = computed(() =>
+  localeOptions.map((opt) => ({ label: opt.label, value: opt.value })),
+);
 </script>
 
 <template>
@@ -62,7 +78,7 @@ async function onUserMenu(key: string): Promise<void> {
       @expand="collapsed = false"
     >
       <div class="logo">
-        <NText strong>ModelHarbor</NText>
+        <NText strong>{{ t('layout.brand') }}</NText>
       </div>
       <NMenu
         :options="menuOptions"
@@ -76,10 +92,19 @@ async function onUserMenu(key: string): Promise<void> {
     <NLayout>
       <NLayoutHeader bordered class="header">
         <NSpace align="center" justify="space-between" style="width: 100%">
-          <NText depth="3">v0.1.0 · M1 ready</NText>
-          <NDropdown :options="userOptions" trigger="click" @select="onUserMenu">
-            <NText style="cursor: pointer">{{ userLabel }}</NText>
-          </NDropdown>
+          <NText depth="3">{{ t('layout.version') }}</NText>
+          <NSpace align="center" :size="12">
+            <NSelect
+              v-model:value="currentLanguage"
+              :options="languageOptions"
+              size="small"
+              style="width: 130px"
+              :consistent-menu-width="false"
+            />
+            <NDropdown :options="userOptions" trigger="click" @select="onUserMenu">
+              <NText style="cursor: pointer">{{ userLabel }}</NText>
+            </NDropdown>
+          </NSpace>
         </NSpace>
       </NLayoutHeader>
       <NLayoutContent content-style="padding: 24px;">
