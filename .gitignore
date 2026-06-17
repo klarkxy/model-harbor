@@ -19,3 +19,30 @@ data/
 .vscode/*
 !.vscode/extensions.json
 .codex-tmp
+
+# Test artifacts
+test-results/
+playwright-report/
+.nyc_output/
+.vitest-reports/
+
+# TypeScript
+*.tsbuildinfo
+
+# Turborepo
+.turbo/
+
+# Local files
+*.local
+
+# Editor swap files
+*.swp
+*.swo
+
+# Secrets
+*.pem
+*.key
+
+# Deploy platforms
+.vercel/
+.netlify/
