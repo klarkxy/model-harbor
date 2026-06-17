@@ -1,0 +1,24 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build:shared",
+      "type": "shell",
+      "command": "pnpm",
+      "args": ["--filter", "@modelharbor/shared", "build"],
+      "problemMatcher": ["$tsc"],
+      "group": "build",
+      "detail": "Build the workspace shared package so API and web can import it."
+    },
+    {
+      "label": "build:web",
+      "type": "shell",
+      "command": "pnpm",
+      "args": ["--filter", "@modelharbor/web", "build"],
+      "dependsOn": ["build:shared"],
+      "problemMatcher": ["$tsc"],
+      "group": "build",
+      "detail": "Build the web app so the API can serve it in single-port mode."
+    }
+  ]
+}

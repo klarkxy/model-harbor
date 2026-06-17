@@ -125,8 +125,10 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
     registerAuditRoutes(app, { db: options.db });
     registerGatewayRoutes(app, { db: options.db, secretKey });
 
-    // Serve built web assets in production
-    if (isProduction) {
+    // Serve built web assets in production, or in development when explicitly
+    // requested (useful for single-port full-stack debugging).
+    const serveWeb = isProduction || process.env["MODELHARBOR_SERVE_WEB"] === "1";
+    if (serveWeb) {
       const staticRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "web", "dist");
       await app.register(fastifyStatic, {
         root: staticRoot,

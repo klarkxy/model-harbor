@@ -1,0 +1,180 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "API: dev server",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@modelharbor/api",
+        "exec",
+        "tsx",
+        "watch",
+        "--inspect",
+        "src/main.ts"
+      ],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "build:shared",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "autoAttachChildProcesses": true,
+      "restart": true,
+      "presentation": { "group": "server", "order": 1 }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "API: current TS file",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@modelharbor/api", "exec", "tsx", "${file}"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "presentation": { "group": "server", "order": 2 }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "API: current test",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@modelharbor/api",
+        "exec",
+        "vitest",
+        "run",
+        "${file}"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "autoAttachChildProcesses": true,
+      "presentation": { "group": "test", "order": 1 }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Web: dev server",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@modelharbor/web", "exec", "vite", "--strictPort"],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "build:shared",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "presentation": { "group": "client", "order": 1 }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Web: dev + Chrome",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@modelharbor/web", "exec", "vite", "--strictPort"],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "build:shared",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "serverReadyAction": {
+        "pattern": "http://localhost:",
+        "uriFormat": "http://localhost:5173",
+        "action": "debugWithChrome"
+      },
+      "presentation": { "group": "client", "order": 2 }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Web: current test",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@modelharbor/web",
+        "exec",
+        "vitest",
+        "run",
+        "${file}"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "autoAttachChildProcesses": true,
+      "presentation": { "group": "test", "order": 2 }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Shared: current test",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@modelharbor/shared",
+        "exec",
+        "vitest",
+        "run",
+        "${file}"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "autoAttachChildProcesses": true,
+      "presentation": { "group": "test", "order": 3 }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "E2E: current file",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["exec", "playwright", "test", "${file}", "--debug"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "presentation": { "group": "test", "order": 4 }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Full stack: single port 2999",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@modelharbor/api",
+        "exec",
+        "tsx",
+        "watch",
+        "--inspect",
+        "src/main.ts"
+      ],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "build:web",
+      "env": {
+        "MODELHARBOR_PORT": "2999",
+        "MODELHARBOR_SERVE_WEB": "1"
+      },
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "autoAttachChildProcesses": true,
+      "restart": true,
+      "serverReadyAction": {
+        "pattern": "Server listening at http://127.0.0.1:2999",
+        "uriFormat": "http://127.0.0.1:2999",
+        "action": "debugWithChrome"
+      },
+      "presentation": { "group": "compounds", "order": 3 }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full stack: API + Web",
+      "configurations": ["API: dev server", "Web: dev + Chrome"],
+      "stopAll": true,
+      "presentation": { "group": "compounds", "order": 1 }
+    },
+    {
+      "name": "Dev servers: API + Web",
+      "configurations": ["API: dev server", "Web: dev server"],
+      "stopAll": true,
+      "presentation": { "group": "compounds", "order": 2 }
+    }
+  ]
+}

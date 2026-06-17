@@ -18,6 +18,8 @@ data/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
 .codex-tmp
 
 # Test artifacts
@@ -34,6 +36,9 @@ playwright-report/
 
 # Local files
 *.local
+
+# Local learnings / per-developer notes
+.learnings/
 
 # Editor swap files
 *.swp
