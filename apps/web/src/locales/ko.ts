@@ -1,6 +1,6 @@
 import type { Messages } from './types.js';
 
-const messages: Messages = {
+const messages = {
   common: {
     create: '생성',
     cancel: '취소',
@@ -420,6 +420,6 @@ const messages: Messages = {
     pt: 'Português',
     ru: 'Русский',
   },
-};
+} as unknown as Messages;
 
 export default messages;

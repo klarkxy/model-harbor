@@ -51,3 +51,6 @@ playwright-report/
 # Deploy platforms
 .vercel/
 .netlify/
+
+# Playwright MCP temporary logs/screenshots
+.playwright-mcp/

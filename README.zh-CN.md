@@ -19,25 +19,25 @@ ModelHarbor（模型港）是一个轻量级、以仪表盘为核心的 LLM API 
 
 ## 支持的协议
 
-| 客户端协议 | 端点 | 状态 |
-| --------- | ---- | ---- |
-| Anthropic Messages | `POST /v1/messages` | ✅ 支持（流式 + 非流式） |
+| 客户端协议              | 端点                        | 状态                     |
+| ----------------------- | --------------------------- | ------------------------ |
+| Anthropic Messages      | `POST /v1/messages`         | ✅ 支持（流式 + 非流式） |
 | OpenAI Chat Completions | `POST /v1/chat/completions` | ✅ 支持（流式 + 非流式） |
-| OpenAI 模型列表 | `GET /v1/models` | ✅ 支持 |
+| OpenAI 模型列表         | `GET /v1/models`            | ✅ 支持                  |
 
 ---
 
 ## 技术栈
 
-| 层级 | 技术 |
-| ---- | ---- |
-| 后端 | Node.js, Fastify 5, TypeScript |
-| 前端 | Vue 3, Vite, Naive UI, Pinia |
-| 数据库 | SQLite (libsql) 优先，后续支持 PostgreSQL |
-| ORM | Drizzle |
-|  monorepo | pnpm workspaces |
-| 测试 | Vitest（单元测试）, Playwright（端到端测试） |
-| 许可证 | AGPL-3.0-or-later |
+| 层级     | 技术                                         |
+| -------- | -------------------------------------------- |
+| 后端     | Node.js, Fastify 5, TypeScript               |
+| 前端     | Vue 3, Vite, Naive UI, Pinia                 |
+| 数据库   | SQLite (libsql) 优先，后续支持 PostgreSQL    |
+| ORM      | Drizzle                                      |
+| monorepo | pnpm workspaces                              |
+| 测试     | Vitest（单元测试）, Playwright（端到端测试） |
+| 许可证   | AGPL-3.0-or-later                            |
 
 ---
 
@@ -56,21 +56,21 @@ pnpm install
 
 # 开发模式：并行启动 API + 仪表盘
 # 仪表盘: http://localhost:5173
-# API:     http://localhost:2999
+# API:     http://localhost:3000
 pnpm dev
 ```
 
-> **开发模式：** Vite 开发服务器在 5173 端口提供仪表盘，并将 API 请求代理到 Fastify 后端（2999）。
+> **开发模式：** Vite 开发服务器在 5173 端口提供仪表盘，并将 API 请求代理到 Fastify 后端（3000）。
 >
-> **生产模式：** 先构建（`pnpm build`），然后 `pnpm start` 会从单一端口（2999）同时提供仪表盘和 API。
+> **生产模式：** 先构建（`pnpm build`），然后 `pnpm start` 会从单一端口（3000）同时提供仪表盘和 API。
 
 ### 首次登录
 
 首次运行时会根据环境变量自动创建管理员账号：
 
-| 变量 | 默认值 |
-|------|--------|
-| `MODELHARBOR_ADMIN_USERNAME` | `admin` |
+| 变量                         | 默认值                   |
+| ---------------------------- | ------------------------ |
+| `MODELHARBOR_ADMIN_USERNAME` | `admin`                  |
 | `MODELHARBOR_ADMIN_PASSWORD` | `change-me-on-first-run` |
 
 > ⚠️ **生产环境：** 务必修改默认密码后再暴露服务。
@@ -84,7 +84,7 @@ pnpm dev
 
 ```bash
 # OpenAI 兼容格式
-curl http://localhost:2999/v1/chat/completions \
+curl http://localhost:3000/v1/chat/completions \
   -H "Authorization: Bearer mh_你的消费密钥" \
   -H "Content-Type: application/json" \
   -d '{
@@ -93,7 +93,7 @@ curl http://localhost:2999/v1/chat/completions \
   }'
 
 # Anthropic 兼容格式
-curl http://localhost:2999/v1/messages \
+curl http://localhost:3000/v1/messages \
   -H "x-api-key: mh_你的消费密钥" \
   -H "anthropic-version: 2023-06-01" \
   -H "Content-Type: application/json" \
@@ -122,15 +122,15 @@ e2e/           Playwright 端到端测试
 
 ## 环境变量
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `MODELHARBOR_HOST` | `0.0.0.0` | 绑定地址 |
-| `MODELHARBOR_PORT` | `2999` | API 端口 |
-| `MODELHARBOR_DATABASE_URL` | `file:./modelharbor.sqlite` | SQLite 数据库路径 |
-| `MODELHARBOR_SECRET_KEY` | *(无)* | 上游密钥加密密钥 |
-| `MODELHARBOR_ADMIN_USERNAME` | `admin` | 首个管理员用户名 |
-| `MODELHARBOR_ADMIN_PASSWORD` | `change-me-on-first-run` | 首个管理员密码 |
-| `MODELHARBOR_LOG_LEVEL` | `info` | 日志级别 |
+| 变量                         | 默认值                      | 说明              |
+| ---------------------------- | --------------------------- | ----------------- |
+| `MODELHARBOR_HOST`           | `0.0.0.0`                   | 绑定地址          |
+| `MODELHARBOR_PORT`           | `3000`                      | API 端口          |
+| `MODELHARBOR_DATABASE_URL`   | `file:./modelharbor.sqlite` | SQLite 数据库路径 |
+| `MODELHARBOR_SECRET_KEY`     | _(无)_                      | 上游密钥加密密钥  |
+| `MODELHARBOR_ADMIN_USERNAME` | `admin`                     | 首个管理员用户名  |
+| `MODELHARBOR_ADMIN_PASSWORD` | `change-me-on-first-run`    | 首个管理员密码    |
+| `MODELHARBOR_LOG_LEVEL`      | `info`                      | 日志级别          |
 
 > **生产环境注意：** 在暴露服务前，务必修改 `MODELHARBOR_SECRET_KEY` 和 `MODELHARBOR_ADMIN_PASSWORD`。如果 `SECRET_KEY` 丢失，加密的上游密钥将无法恢复。
 
@@ -153,7 +153,7 @@ e2e/           Playwright 端到端测试
 #### POST /v1/chat/completions（OpenAI 兼容）
 
 ```bash
-curl http://localhost:2999/v1/chat/completions \
+curl http://localhost:3000/v1/chat/completions \
   -H "Authorization: Bearer mh_你的消费密钥" \
   -H "Content-Type: application/json" \
   -d '{
@@ -166,7 +166,7 @@ curl http://localhost:2999/v1/chat/completions \
 #### POST /v1/messages（Anthropic 兼容）
 
 ```bash
-curl http://localhost:2999/v1/messages \
+curl http://localhost:3000/v1/messages \
   -H "x-api-key: mh_你的消费密钥" \
   -H "anthropic-version: 2023-06-01" \
   -H "Content-Type: application/json" \
@@ -183,7 +183,7 @@ curl http://localhost:2999/v1/messages \
 列出当前消费密钥有权限访问的所有模型和模型组。
 
 ```bash
-curl http://localhost:2999/v1/models \
+curl http://localhost:3000/v1/models \
   -H "Authorization: Bearer mh_你的消费密钥"
 ```
 
@@ -195,12 +195,12 @@ curl http://localhost:2999/v1/models \
 
 ### 常见错误码
 
-| 状态码 | 场景 |
-|--------|------|
-| 401 | 消费密钥无效或已撤销 |
-| 403 | 消费密钥没有该模型的访问权限 |
-| 404 | 请求的模型名称不存在 |
-| 429 | 所有候选上游都不可用（冷却/冻结/超配额） |
+| 状态码 | 场景                                     |
+| ------ | ---------------------------------------- |
+| 401    | 消费密钥无效或已撤销                     |
+| 403    | 消费密钥没有该模型的访问权限             |
+| 404    | 请求的模型名称不存在                     |
+| 429    | 所有候选上游都不可用（冷却/冻结/超配额） |
 
 ---
 

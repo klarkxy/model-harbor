@@ -104,11 +104,19 @@ async function tryCandidates(
     attempts += 1;
     const adapter = getAdapter(candidate.providerType);
     const request = buildHttpRequest(ctx, { ir: args.ir, candidate, adapter });
+    console.error(
+      `[modelharbor upstream] candidate provider=${candidate.providerType} model=${candidate.realModelName} upstreamKeyId=${candidate.upstreamKeyId} baseUrl=${request.url}`,
+    );
     const outcome = await sendUpstreamRequest(request, {
       timeoutMs: ctx.defaultUpstreamTimeoutMs ?? DEFAULT_UPSTREAM_TIMEOUT_MS,
     });
 
     const classified = classifyOutcome(adapter, { outcome, request, ir: args.ir });
+    if (classified.kind === 'error') {
+      console.error(
+        `[modelharbor upstream] classified error: ${classified.error.category} providerCode=${classified.error.providerCode} message=${classified.error.providerMessage}`,
+      );
+    }
     if (classified.kind === 'success') {
       return {
         ok: true,
@@ -163,7 +171,8 @@ function buildHttpRequest(
     upstreamKeyId: args.candidate.upstreamKeyId,
     timeoutMs: ctx.defaultUpstreamTimeoutMs ?? DEFAULT_UPSTREAM_TIMEOUT_MS,
     stream: args.ir.stream,
-    baseUrl: args.candidate.baseUrl,
+    baseUrl: args.candidate.endpointBaseUrl,
+    apiPath: args.candidate.endpointApiPath,
     apiKey,
   };
   return args.adapter.buildRequest(providerCtx);
@@ -342,8 +351,9 @@ async function runGateway(
       quotaExceeded.add(id);
     }
   }
-  const { accepted } = filterCandidates(all, { sourceProtocol, now, quotaExceeded });
-  if (accepted.length === 0) {
+  const { accepted, fallback } = filterCandidates(all, { sourceProtocol, now, quotaExceeded });
+  const usableCandidates = accepted.length > 0 ? accepted : fallback;
+  if (usableCandidates.length === 0) {
     throw new NoRouteAvailableError('no available upstream for target');
   }
 
@@ -364,7 +374,7 @@ async function runGateway(
     now,
   });
   let stickyHit = false;
-  let sorted = [...accepted].sort((a, b) => a.priority - b.priority);
+  let sorted = [...usableCandidates].sort((a, b) => a.priority - b.priority);
   if (stickyLookup.binding && isStickyBindingValid(stickyLookup.binding, sorted, { now })) {
     const bound = sorted.find(
       (c) =>

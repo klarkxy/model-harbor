@@ -1,4 +1,4 @@
-import type { Db } from "./client.js";
+import type { Db } from './client.js';
 
 const STATEMENTS: readonly string[] = [
   // M1
@@ -70,6 +70,8 @@ const STATEMENTS: readonly string[] = [
      api_key_prefix TEXT NOT NULL,
      default_headers_json TEXT,
      supported_models_json TEXT NOT NULL DEFAULT '[]',
+     endpoints_json TEXT,
+     provider_preset_id TEXT,
      enabled INTEGER NOT NULL DEFAULT 1,
      frozen INTEGER NOT NULL DEFAULT 0,
      frozen_reason TEXT,
@@ -81,6 +83,11 @@ const STATEMENTS: readonly string[] = [
      created_at INTEGER NOT NULL,
      updated_at INTEGER NOT NULL
    )`,
+  // Migration: add multi-endpoint / preset columns to existing databases.
+  // SQLite does not support ADD COLUMN IF NOT EXISTS, so we catch the
+  // duplicate-column error and treat it as a no-op.
+  `ALTER TABLE upstream_keys ADD COLUMN endpoints_json TEXT`,
+  `ALTER TABLE upstream_keys ADD COLUMN provider_preset_id TEXT`,
   `CREATE TABLE IF NOT EXISTS upstream_key_quotas (
      id TEXT PRIMARY KEY,
      upstream_key_id TEXT NOT NULL UNIQUE,
@@ -256,6 +263,20 @@ const STATEMENTS: readonly string[] = [
 
 export async function initSchema(db: Db): Promise<void> {
   for (const sql of STATEMENTS) {
-    await db.run(sql);
+    try {
+      await db.run(sql);
+    } catch (err) {
+      // SQLite migrations that add columns may fail when the column already
+      // exists (e.g. the table was created by a newer schema). We only swallow
+      // that specific case so genuine schema errors still surface.
+      if (
+        sql.trim().toUpperCase().startsWith('ALTER TABLE') &&
+        err instanceof Error &&
+        /duplicate column name/i.test(err.message)
+      ) {
+        continue;
+      }
+      throw err;
+    }
   }
 }

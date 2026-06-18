@@ -27,11 +27,18 @@ MVP adapters:
 - `anthropic_compatible`
 - `openai_compatible`
 
+Official provider presets are kept in `apps/api/src/modules/providers/presets.ts`. Each preset can declare one or more endpoints, so a single upstream key can serve both Anthropic- and OpenAI-protocol clients. Presets cover mainstream international and China-region providers such as OpenAI, Anthropic, DeepSeek, Moonshot, MiniMax, OpenRouter, OpenCode Go, OpenCode Zen, Groq, Together, Cerebras, Fireworks, xAI, Qwen, Zhipu, Baichuan, ByteDance Volcano Ark, Tencent Hunyuan, Baidu Qianfan, StepFun, and SiliconFlow (硅基流动).
+
+Presets no longer ship hardcoded model lists. They only declare endpoints, display metadata, and optional default headers. The legacy `modelMappings` field on `GET /api/admin/provider-presets` is kept empty for API compatibility. Admins discover available models by calling `POST /api/admin/upstream-keys/discover-models`, which probes the upstream `/v1/models` endpoint and returns `{ realName, publicName }` pairs with `publicName` defaulting to `realName`.
+
+The admin UI consumes presets through `GET /api/admin/provider-presets` and uses the preset `id` as an i18n key under `providers.{id}` in `apps/web/src/locales/*.ts`. Each preset may also declare an `icon` (emoji or future SVG identifier) that the UI renders next to the localized display name.
+
+When an admin selects a preset while creating an upstream key, the form auto-fills the endpoint details and the model mapping list. The model mappings are editable in the UI: each row is `{ realName (required) -> publicName (optional) }`, with add/remove/toggle controls. The preset's computed `modelMappings` become the default template, but the admin can override, disable, or extend them before submitting. The finalized list is sent as `modelMappings` on `POST /api/admin/upstream-keys` and drives automatic model onboarding.
+
+The create drawer also offers a **Fetch models** button. After entering the base URL and API key, the admin can call `POST /api/admin/upstream-keys/discover-models`, which probes the upstream `/v1/models` endpoint, normalizes the response, and returns discovered `{ realName, publicName }` pairs. The UI appends any new real names to the editable mapping list without removing existing rows. Discovery is optional and failures are surfaced so the admin can still proceed with a manually entered mapping list.
+
 Future adapters can be added without changing the router core:
 
-- `deepseek`
-- `qwen`
-- `openrouter`
 - `vertex`
 - `gemini`
 - `custom`
@@ -106,12 +113,12 @@ The adapter should not perform routing, permission checks, quota checks, or stic
 
 Adapters own URL construction.
 
-Examples:
+Defaults:
 
 - Anthropic-compatible: `POST {baseUrl}/v1/messages`
 - OpenAI-compatible: `POST {baseUrl}/v1/chat/completions`
 
-Administrators should enter a base URL. The adapter appends the known endpoint path unless a future advanced setting explicitly allows full endpoint override.
+Administrators should enter a base URL without the version segment. The adapter appends the known endpoint path. When a provider uses a non-standard path (e.g. Zhipu GLM uses `/v4/chat/completions`, ByteDance Ark uses `/v3/chat/completions`, Baidu Qianfan uses `/v2/chat/completions`), a preset endpoint can specify `apiPath` to override the default path entirely.
 
 ## Authentication
 
@@ -176,8 +183,8 @@ Router behavior can then decide whether to retry, cool down, freeze, or return t
 
 Checklist:
 
-1. Add a provider type.
-2. Implement adapter contract.
+1. Add a provider preset in `apps/api/src/modules/providers/presets.ts` with the correct `baseUrl`, `providerType`, optional `apiPath`, and model mappings. If the provider has distinct China and international endpoints, add separate presets.
+2. If the provider needs a new transport or request/response shape, add a provider type and implement the adapter contract.
 3. Declare capabilities.
 4. Add admin dashboard preset labels and help text.
 5. Add fake upstream tests.

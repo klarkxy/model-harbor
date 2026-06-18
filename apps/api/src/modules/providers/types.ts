@@ -7,7 +7,7 @@ import type {
   OpenAIChatCompletionsResponse,
   ProviderCapabilities,
   ProviderType,
-} from "@modelharbor/shared";
+} from '@modelharbor/shared';
 
 // HTTP request the adapter asks the engine to send to the upstream.
 export interface ProviderHttpRequest {
@@ -44,6 +44,9 @@ export interface ProviderRequestContext {
   // The adapter concatenates this with its protocol path (e.g. "/v1/messages")
   // to produce the final URL in `buildRequest`.
   baseUrl: string;
+  // Optional full request path override. When set, the adapter uses this path
+  // directly instead of the default protocol path.
+  apiPath?: string;
   // The decrypted upstream API key. The adapter puts it on the request
   // (x-api-key for Anthropic, Authorization: Bearer for OpenAI). The engine
   // (M4 sender) is responsible for decrypting the upstream key and passing
@@ -78,11 +81,11 @@ export interface ProviderErrorContext {
 // Stream events are intentionally loose for M3 (streaming is M5). The shape is
 // defined here so the adapter contract is complete; M5 will fill it in.
 export type ProviderStreamEventResult =
-  | { kind: "open" }
-  | { kind: "delta"; text: string }
-  | { kind: "usage"; inputTokens: number; outputTokens: number; totalTokens: number }
-  | { kind: "stop"; reason: string | null }
-  | { kind: "ignored" };
+  | { kind: 'open' }
+  | { kind: 'delta'; text: string }
+  | { kind: 'usage'; inputTokens: number; outputTokens: number; totalTokens: number }
+  | { kind: 'stop'; reason: string | null }
+  | { kind: 'ignored' };
 
 // The adapter contract. Each provider type implements this.
 export interface ProviderAdapter {
@@ -105,7 +108,7 @@ export interface ProviderAdapter {
 
   // Extract usage from a successful non-streaming response body, returning
   // null when the provider doesn't include usage in the body.
-  extractUsage(context: ProviderResponseContext): NormalizedChatResponse["usage"];
+  extractUsage(context: ProviderResponseContext): NormalizedChatResponse['usage'];
 }
 
 // Categorized error returned by `normalizeError`. The engine maps each
@@ -113,16 +116,16 @@ export interface ProviderAdapter {
 // preserved for debuggability but never leaked to the public.
 export interface NormalizedProviderError {
   category:
-    | "provider_authentication"
-    | "provider_permission"
-    | "provider_rate_limit"
-    | "provider_quota"
-    | "provider_timeout"
-    | "provider_overloaded"
-    | "provider_model_not_found"
-    | "provider_bad_request"
-    | "provider_stream_error"
-    | "provider_unknown";
+    | 'provider_authentication'
+    | 'provider_permission'
+    | 'provider_rate_limit'
+    | 'provider_quota'
+    | 'provider_timeout'
+    | 'provider_overloaded'
+    | 'provider_model_not_found'
+    | 'provider_bad_request'
+    | 'provider_stream_error'
+    | 'provider_unknown';
   // Provider's own error message (e.g. "Invalid API key"). Useful for audit
   // logs; the engine should NOT echo this to the client (it may carry
   // sensitive details).

@@ -112,11 +112,18 @@ export async function handleStreamRequest(
       quotaExceeded.add(c.upstreamKeyId);
     }
   }
-  const { accepted } = filterCandidates(all, {
+  const { accepted, fallback } = filterCandidates(all, {
     sourceProtocol: streamCtx.sourceProtocol,
     now,
     quotaExceeded,
   });
+  // Streaming currently forwards upstream SSE frames verbatim. Cross-protocol
+  // streaming would require parsing and re-emitting frames in the client
+  // protocol, which is not implemented yet. Surface a clear error instead of
+  // silently sending the wrong wire format.
+  if (accepted.length === 0 && fallback.length > 0) {
+    throw new ValidationError('cross-protocol streaming is not supported yet');
+  }
   if (accepted.length === 0) {
     throw new NoRouteAvailableError('no available upstream for target');
   }
@@ -279,7 +286,8 @@ function buildProviderRequest(
     upstreamKeyId: args.candidate.upstreamKeyId,
     timeoutMs: ctx.defaultUpstreamTimeoutMs ?? 60_000,
     stream: true,
-    baseUrl: args.candidate.baseUrl,
+    baseUrl: args.candidate.endpointBaseUrl,
+    apiPath: args.candidate.endpointApiPath,
     apiKey,
   };
   return getAdapter(args.candidate.providerType).buildRequest(providerCtx);

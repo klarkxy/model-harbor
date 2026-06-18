@@ -1,4 +1,4 @@
-import type { ProviderHttpRequest, ProviderHttpResponse } from "../providers/types.js";
+import type { ProviderHttpRequest, ProviderHttpResponse } from '../providers/types.js';
 
 export interface SendOptions {
   timeoutMs: number;
@@ -23,9 +23,10 @@ export async function sendUpstreamRequest(
   const onParentAbort = (): void => controller.abort();
   if (options.signal) {
     if (options.signal.aborted) controller.abort();
-    else options.signal.addEventListener("abort", onParentAbort);
+    else options.signal.addEventListener('abort', onParentAbort);
   }
   try {
+    console.error(`[modelharbor upstream] --> ${req.method} ${req.url}`);
     const res = await fetch(req.url, {
       method: req.method,
       headers: req.headers,
@@ -38,6 +39,8 @@ export async function sendUpstreamRequest(
     });
     const bodyText = await res.text();
     const bodyJson = tryParseJson(bodyText);
+    const bodyPreview = bodyText.slice(0, 500);
+    console.error(`[modelharbor upstream] <-- ${res.status} ${req.url} body=${bodyPreview}`);
     return {
       response: {
         status: res.status,
@@ -48,18 +51,20 @@ export async function sendUpstreamRequest(
     };
   } catch (err) {
     const e = err as { name?: string; message?: string; cause?: { code?: string } };
-    const name = e.name === "AbortError" ? "timeout" : (e.name ?? "error");
-    const code = e.cause?.code ?? (e.name === "AbortError" ? "ETIMEDOUT" : undefined);
+    const name = e.name === 'AbortError' ? 'timeout' : (e.name ?? 'error');
+    const code = e.cause?.code ?? (e.name === 'AbortError' ? 'ETIMEDOUT' : undefined);
+    const transportError = {
+      name,
+      message: e.message ?? String(err),
+      ...(code !== undefined ? { code } : {}),
+    };
+    console.error(`[modelharbor upstream] <-- transport error ${req.url}`, transportError);
     return {
-      transportError: {
-        name,
-        message: e.message ?? String(err),
-        ...(code !== undefined ? { code } : {}),
-      },
+      transportError,
     };
   } finally {
     clearTimeout(timer);
-    if (options.signal) options.signal.removeEventListener("abort", onParentAbort);
+    if (options.signal) options.signal.removeEventListener('abort', onParentAbort);
   }
 }
 

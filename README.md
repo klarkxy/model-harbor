@@ -19,25 +19,25 @@ ModelHarbor is a lightweight, dashboard-first LLM API router. It helps administr
 
 ## Supported Protocols
 
-| Client Protocol | Endpoint | Status |
-| --------------- | -------- | ------ |
-| Anthropic Messages | `POST /v1/messages` | ✅ Supported (stream + non-stream) |
+| Client Protocol         | Endpoint                    | Status                             |
+| ----------------------- | --------------------------- | ---------------------------------- |
+| Anthropic Messages      | `POST /v1/messages`         | ✅ Supported (stream + non-stream) |
 | OpenAI Chat Completions | `POST /v1/chat/completions` | ✅ Supported (stream + non-stream) |
-| OpenAI Models List | `GET /v1/models` | ✅ Supported |
+| OpenAI Models List      | `GET /v1/models`            | ✅ Supported                       |
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology |
-| ----- | ---------- |
-| Backend | Node.js, Fastify 5, TypeScript |
-| Frontend | Vue 3, Vite, Naive UI, Pinia |
+| Layer    | Technology                              |
+| -------- | --------------------------------------- |
+| Backend  | Node.js, Fastify 5, TypeScript          |
+| Frontend | Vue 3, Vite, Naive UI, Pinia            |
 | Database | SQLite (libsql) first, PostgreSQL later |
-| ORM | Drizzle |
-| Monorepo | pnpm workspaces |
-| Test | Vitest (unit), Playwright (e2e) |
-| License | AGPL-3.0-or-later |
+| ORM      | Drizzle                                 |
+| Monorepo | pnpm workspaces                         |
+| Test     | Vitest (unit), Playwright (e2e)         |
+| License  | AGPL-3.0-or-later                       |
 
 ---
 
@@ -56,21 +56,21 @@ pnpm install
 
 # Start API + dashboard in parallel (development)
 # Dashboard: http://localhost:5173
-# API:       http://localhost:2999
+# API:       http://localhost:3000
 pnpm dev
 ```
 
-> **Development mode:** Vite dev server serves the dashboard on port 5173 and proxies API calls to the Fastify backend on port 2999.
+> **Development mode:** Vite dev server serves the dashboard on port 5173 and proxies API calls to the Fastify backend on port 3000.
 >
-> **Production mode:** Build both packages (`pnpm build`), then `pnpm start` serves the dashboard and API from a single port (2999).
+> **Production mode:** Build both packages (`pnpm build`), then `pnpm start` serves the dashboard and API from a single port (3000).
 
 ### First Login
 
 The first admin account is created automatically from environment variables on first run:
 
-| Variable | Default |
-|----------|---------|
-| `MODELHARBOR_ADMIN_USERNAME` | `admin` |
+| Variable                     | Default                  |
+| ---------------------------- | ------------------------ |
+| `MODELHARBOR_ADMIN_USERNAME` | `admin`                  |
 | `MODELHARBOR_ADMIN_PASSWORD` | `change-me-on-first-run` |
 
 > ⚠️ **Production:** Change the default password before exposing the service.
@@ -84,7 +84,7 @@ The first admin account is created automatically from environment variables on f
 
 ```bash
 # OpenAI-compatible
-curl http://localhost:2999/v1/chat/completions \
+curl http://localhost:3000/v1/chat/completions \
   -H "Authorization: Bearer mh_your_consumer_key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -93,7 +93,7 @@ curl http://localhost:2999/v1/chat/completions \
   }'
 
 # Anthropic-compatible
-curl http://localhost:2999/v1/messages \
+curl http://localhost:3000/v1/messages \
   -H "x-api-key: mh_your_consumer_key" \
   -H "anthropic-version: 2023-06-01" \
   -H "Content-Type: application/json" \
@@ -122,15 +122,15 @@ e2e/           Playwright end-to-end tests
 
 ## Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MODELHARBOR_HOST` | `0.0.0.0` | Bind address |
-| `MODELHARBOR_PORT` | `2999` | API port |
-| `MODELHARBOR_DATABASE_URL` | `file:./modelharbor.sqlite` | SQLite database path |
-| `MODELHARBOR_SECRET_KEY` | *(none)* | Encryption key for upstream secrets |
-| `MODELHARBOR_ADMIN_USERNAME` | `admin` | First admin username |
-| `MODELHARBOR_ADMIN_PASSWORD` | `change-me-on-first-run` | First admin password |
-| `MODELHARBOR_LOG_LEVEL` | `info` | Log level |
+| Variable                     | Default                     | Description                         |
+| ---------------------------- | --------------------------- | ----------------------------------- |
+| `MODELHARBOR_HOST`           | `0.0.0.0`                   | Bind address                        |
+| `MODELHARBOR_PORT`           | `3000`                      | API port                            |
+| `MODELHARBOR_DATABASE_URL`   | `file:./modelharbor.sqlite` | SQLite database path                |
+| `MODELHARBOR_SECRET_KEY`     | _(none)_                    | Encryption key for upstream secrets |
+| `MODELHARBOR_ADMIN_USERNAME` | `admin`                     | First admin username                |
+| `MODELHARBOR_ADMIN_PASSWORD` | `change-me-on-first-run`    | First admin password                |
+| `MODELHARBOR_LOG_LEVEL`      | `info`                      | Log level                           |
 
 > **Production note:** Change `MODELHARBOR_SECRET_KEY` and `MODELHARBOR_ADMIN_PASSWORD` before exposing the service. If `SECRET_KEY` is lost, encrypted upstream keys cannot be recovered.
 
@@ -153,7 +153,7 @@ If both are present, `Authorization` wins.
 #### POST /v1/chat/completions (OpenAI-compatible)
 
 ```bash
-curl http://localhost:2999/v1/chat/completions \
+curl http://localhost:3000/v1/chat/completions \
   -H "Authorization: Bearer mh_your_consumer_key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -166,7 +166,7 @@ curl http://localhost:2999/v1/chat/completions \
 #### POST /v1/messages (Anthropic-compatible)
 
 ```bash
-curl http://localhost:2999/v1/messages \
+curl http://localhost:3000/v1/messages \
   -H "x-api-key: mh_your_consumer_key" \
   -H "anthropic-version: 2023-06-01" \
   -H "Content-Type: application/json" \
@@ -183,7 +183,7 @@ curl http://localhost:2999/v1/messages \
 Lists all models and model groups the consumer key can access.
 
 ```bash
-curl http://localhost:2999/v1/models \
+curl http://localhost:3000/v1/models \
   -H "Authorization: Bearer mh_your_consumer_key"
 ```
 
@@ -195,12 +195,12 @@ curl http://localhost:2999/v1/models \
 
 ### Common Error Codes
 
-| Status | Scenario |
-|--------|----------|
-| 401 | Invalid or revoked consumer key |
-| 403 | Consumer key has no access to this model |
-| 404 | Model name not found |
-| 429 | All candidates unavailable (cooldown / frozen / quota) |
+| Status | Scenario                                               |
+| ------ | ------------------------------------------------------ |
+| 401    | Invalid or revoked consumer key                        |
+| 403    | Consumer key has no access to this model               |
+| 404    | Model name not found                                   |
+| 429    | All candidates unavailable (cooldown / frozen / quota) |
 
 ---
 
@@ -258,4 +258,3 @@ pnpm e2e          # Run end-to-end tests
 ## License
 
 [AGPL-3.0-or-later](LICENSE)
-
