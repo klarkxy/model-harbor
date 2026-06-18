@@ -226,7 +226,7 @@ pnpm build
 When Playwright is added:
 
 ```text
-pnpm test:e2e
+pnpm e2e
 ```
 
 Live provider tests must be opt-in and skipped by default.

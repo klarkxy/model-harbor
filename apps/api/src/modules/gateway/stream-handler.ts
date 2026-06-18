@@ -35,6 +35,11 @@ import { getEnabledQuotaPeriods, recordQuotaUsage, wouldExceedQuota } from '../q
 import { startUpstreamStream, type RawStreamEvent, type StreamStart } from './stream-sender.js';
 import { writeUsageRecord } from '../usage/index.js';
 import {
+  generateTraceId,
+  writeTraceLogEntry,
+  upsertConsumptionStats,
+} from '../observability/index.js';
+import {
   ProviderError,
   ProviderQuotaError,
   ProviderRateLimitError,
@@ -49,6 +54,7 @@ export interface StreamGatewayContext {
   consumerKeyId: string;
   appId: string;
   defaultUpstreamTimeoutMs?: number;
+  traceId?: string;
 }
 
 export interface StreamRequestContext {
@@ -87,17 +93,29 @@ export async function handleStreamRequest(
   reply: FastifyReply,
 ): Promise<void> {
   const start = Date.now();
+  const traceId = ctx.traceId ?? generateTraceId();
+  let stepIndex = 0;
+  const log = (input: Omit<import('../observability/trace-logs.js').TraceLogEntryInput, 'requestTraceId' | 'stepIndex'> & { step: import('../observability/trace-logs.js').TraceStep }) =>
+    writeTraceLogEntry(ctx.db, { ...input, requestTraceId: traceId, stepIndex: ++stepIndex, now: new Date() });
+
+  await log({ step: 'request_start', appId: ctx.appId, consumerKeyId: ctx.consumerKeyId, requestedTargetName: streamCtx.ir.requestedModel, sourceProtocol: streamCtx.sourceProtocol });
 
   const target = await resolveTargetByName(ctx.db, streamCtx.ir.requestedModel);
+  await log({ step: 'target_resolve', resolvedTargetType: target.targetType, resolvedTargetId: target.targetId });
+
   await assertConsumerKeyAccess(ctx.db, {
     consumerKeyId: ctx.consumerKeyId,
     targetType: target.targetType,
     targetId: target.targetId,
   });
+  await log({ step: 'access_allowed' });
+
   const all = await expandCandidates(ctx.db, {
     targetType: target.targetType,
     targetId: target.targetId,
   });
+  await log({ step: 'candidates_expand', acceptedCount: all.length });
+
   // Compute quota state for the upstream keys in the candidate list. M6.
   const now = new Date();
   const quotaExceeded = new Set<string>();
@@ -113,11 +131,19 @@ export async function handleStreamRequest(
       quotaExceeded.add(c.upstreamKeyId);
     }
   }
-  const { accepted, fallback } = filterCandidates(all, {
+  const { accepted, dropped, fallback } = filterCandidates(all, {
     sourceProtocol: streamCtx.sourceProtocol,
     now,
     quotaExceeded,
+    rawRequest: streamCtx.ir.rawRequest,
   });
+  await log({
+    step: 'candidates_filter',
+    acceptedCount: accepted.length,
+    droppedCount: dropped.length,
+    fallbackCount: fallback.length,
+  });
+
   // Cross-protocol streaming is only safe when the upstream adapter can
   // translate its native SSE frames into the client protocol. Adapters declare
   // this via capabilities.protocols. Same-protocol candidates are always used;
@@ -130,8 +156,10 @@ export async function handleStreamRequest(
   const usableCandidates = accepted.length > 0 ? accepted : translatableFallback;
   if (usableCandidates.length === 0) {
     if (fallback.length > 0) {
+      await log({ step: 'request_complete', finalOutcome: 'error', latencyMs: Date.now() - start });
       throw new ValidationError('cross-protocol streaming is not supported yet');
     }
+    await log({ step: 'request_complete', finalOutcome: 'error', latencyMs: Date.now() - start });
     throw new NoRouteAvailableError('no available upstream for target');
   }
   let sorted = [...usableCandidates].sort((a, b) => a.priority - b.priority);
@@ -153,6 +181,7 @@ export async function handleStreamRequest(
     fingerprint,
     now,
   });
+  await log({ step: 'sticky_check' });
   let stickyHit = false;
   if (stickyLookup.binding && isStickyBindingValid(stickyLookup.binding, sorted, { now })) {
     const bound = sorted.find(
@@ -164,6 +193,7 @@ export async function handleStreamRequest(
       sorted = [bound, ...sorted.filter((c) => c !== bound)];
       stickyHit = true;
       void touchStickyBinding(ctx.db, { id: stickyLookup.binding.id, now });
+      await log({ step: 'sticky_hit', upstreamKeyId: bound.upstreamKeyId, upstreamKeyName: bound.upstreamKeyName, realModelName: bound.realModelName });
     }
   }
 
@@ -176,9 +206,19 @@ export async function handleStreamRequest(
   let started = false;
   let lastError: NormalizedErrorLite | null = null;
   let lastCandidate: ResolvedCandidate | null = null;
+  let attempts = 0;
 
   for (const candidate of sorted) {
     lastCandidate = candidate;
+    attempts += 1;
+    await log({
+      step: 'candidate_attempt',
+      upstreamKeyId: candidate.upstreamKeyId,
+      upstreamKeyName: candidate.upstreamKeyName,
+      realModelName: candidate.realModelName,
+      endpointProtocol: candidate.endpointProtocol,
+      attemptOrder: attempts,
+    });
     const adapter = getProviderAdapter(candidate);
     const providerReq = await buildProviderRequest(ctx, { ir: streamCtx.ir, candidate });
     abortController = new AbortController();
@@ -193,6 +233,15 @@ export async function handleStreamRequest(
         providerMessage: startResult.error.message,
         upstreamStatus: 0,
       };
+      await log({
+        step: 'candidate_fail',
+        upstreamKeyId: candidate.upstreamKeyId,
+        upstreamKeyName: candidate.upstreamKeyName,
+        realModelName: candidate.realModelName,
+        attemptOrder: attempts,
+        errorCategory: lastError.category,
+        errorMessage: lastError.providerMessage,
+      });
       await tryCooldown(
         ctx,
         candidate,
@@ -216,6 +265,17 @@ export async function handleStreamRequest(
         transportError: undefined,
       });
       lastError = providerError;
+      await log({
+        step: 'candidate_fail',
+        upstreamKeyId: candidate.upstreamKeyId,
+        upstreamKeyName: candidate.upstreamKeyName,
+        realModelName: candidate.realModelName,
+        attemptOrder: attempts,
+        httpStatus: startResult.status,
+        errorCategory: providerError.category,
+        errorCode: providerError.providerCode ?? undefined,
+        errorMessage: providerError.providerMessage ?? undefined,
+      });
       await tryCooldown(
         ctx,
         candidate,
@@ -238,6 +298,8 @@ export async function handleStreamRequest(
       abortController,
       stickyHit,
       fingerprint,
+      traceId,
+      log,
     });
     if (started) {
       return; // usage record already written by driveStream
@@ -248,7 +310,7 @@ export async function handleStreamRequest(
   }
 
   if (!started) {
-    const fallback: NormalizedErrorLite = lastError ?? {
+    const fallbackErr: NormalizedErrorLite = lastError ?? {
       category: 'provider_unknown',
       providerCode: null,
       providerMessage: 'no upstream succeeded',
@@ -260,11 +322,12 @@ export async function handleStreamRequest(
         streamCtx,
         target,
         lastCandidate,
-        fallback,
+        fallbackErr,
         Date.now() - start,
       );
     }
-    throw toNormalizedError(fallback);
+    await log({ step: 'request_complete', finalOutcome: 'error', latencyMs: Date.now() - start });
+    throw toNormalizedError(fallbackErr);
   }
 }
 
@@ -342,6 +405,8 @@ interface DriveStreamArgs {
   abortController: AbortController;
   stickyHit: boolean;
   fingerprint: string;
+  traceId: string;
+  log: (input: Omit<import('../observability/trace-logs.js').TraceLogEntryInput, 'requestTraceId' | 'stepIndex'> & { step: import('../observability/trace-logs.js').TraceStep }) => Promise<void>;
 }
 
 // Returns true once any frame has been written to the client; false if the
@@ -359,18 +424,22 @@ async function driveStream(args: DriveStreamArgs): Promise<boolean> {
     abortController,
     stickyHit,
     fingerprint,
+    traceId,
+    log,
   } = args;
   if (start.kind !== 'ok') {
     throw new Error('driveStream called with non-ok start');
   }
   const startedAt = Date.now();
   const usageBag: {
-    value: { inputTokens: number; outputTokens: number; totalTokens: number } | null;
+    value: { inputTokens: number; outputTokens: number; totalTokens: number; cacheReadTokens: number; cacheWriteTokens: number } | null;
   } = { value: null };
   let lastError: NormalizedErrorLite | null = null;
   let clientDisconnected = false;
   let closedByUpstream = false;
   let firstWrite = false;
+
+  await log({ step: 'stream_start', upstreamKeyId: candidate.upstreamKeyId, upstreamKeyName: candidate.upstreamKeyName, realModelName: candidate.realModelName });
 
   // Single client-disconnect listener. The handler may have registered
   // an earlier listener on the same socket (it owns the route-level
@@ -423,14 +492,24 @@ async function driveStream(args: DriveStreamArgs): Promise<boolean> {
         const inputTokens =
           result.inputTokens === -1 ? (prev?.inputTokens ?? 0) : result.inputTokens;
         const outputTokens = result.outputTokens;
+        const cacheReadTokens =
+          result.cacheReadTokens !== undefined
+            ? (result.cacheReadTokens === -1 ? (prev?.cacheReadTokens ?? 0) : result.cacheReadTokens)
+            : (prev?.cacheReadTokens ?? 0);
+        const cacheWriteTokens =
+          result.cacheWriteTokens !== undefined
+            ? (result.cacheWriteTokens === -1 ? (prev?.cacheWriteTokens ?? 0) : result.cacheWriteTokens)
+            : (prev?.cacheWriteTokens ?? 0);
         usageBag.value = {
           inputTokens,
           outputTokens,
           totalTokens: inputTokens + outputTokens,
+          cacheReadTokens,
+          cacheWriteTokens,
         };
       }
       if (!firstWrite) {
-        writeStreamHeaders(reply, start.headers);
+        writeStreamHeaders(reply, start.headers, traceId);
         firstWrite = true;
       }
       const frames = result.clientFrame ?? raw;
@@ -491,7 +570,7 @@ async function driveStream(args: DriveStreamArgs): Promise<boolean> {
       latencyMs,
       stickyHit,
     );
-    const usageTokens = usageBag.value ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+    const usageTokens = usageBag.value ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
     const stickyNow = new Date();
     // Bump every configured period for this upstream key so hour/day/week/
     // month caps actually trigger freezes. `recordQuotaUsage` also bumps
@@ -515,6 +594,27 @@ async function driveStream(args: DriveStreamArgs): Promise<boolean> {
     } catch {
       /* quota is best-effort */
     }
+    // Update daily consumption stats (M8). Best-effort.
+    try {
+      await upsertConsumptionStats(ctx.db, {
+        upstreamKeyId: candidate.upstreamKeyId,
+        realModelName: candidate.realModelName,
+        delta: {
+          requestCount: 1,
+          successCount: 1,
+          errorCount: 0,
+          cacheReadTokens: usageTokens.cacheReadTokens ?? 0,
+          cacheWriteTokens: usageTokens.cacheWriteTokens ?? 0,
+          inputTokens: usageTokens.inputTokens,
+          outputTokens: usageTokens.outputTokens,
+          totalTokens: usageTokens.totalTokens,
+          latencyMs,
+        },
+        now: stickyNow,
+      });
+    } catch {
+      /* consumption stats are best-effort */
+    }
     // Sticky binding stays fire-and-forget: a missing or stale binding
     // only causes the next request to pick a fresh candidate.
     void upsertStickyBinding(ctx.db, {
@@ -526,11 +626,12 @@ async function driveStream(args: DriveStreamArgs): Promise<boolean> {
       realModelName: candidate.realModelName,
       now: stickyNow,
     });
+    await log({ step: 'stream_end', upstreamKeyId: candidate.upstreamKeyId, upstreamKeyName: candidate.upstreamKeyName, realModelName: candidate.realModelName, latencyMs: Date.now() - startedAt });
   }
   return firstWrite;
 }
 
-function writeStreamHeaders(reply: FastifyReply, upstreamHeaders: Record<string, string>): void {
+function writeStreamHeaders(reply: FastifyReply, upstreamHeaders: Record<string, string>, traceId?: string): void {
   reply.hijack();
   reply.raw.statusCode = 200;
   reply.raw.setHeader('content-type', 'text/event-stream; charset=utf-8');
@@ -539,6 +640,7 @@ function writeStreamHeaders(reply: FastifyReply, upstreamHeaders: Record<string,
   reply.raw.setHeader('x-accel-buffering', 'no');
   const requestId = upstreamHeaders['x-request-id'];
   if (requestId) reply.raw.setHeader('x-request-id', requestId);
+  if (traceId) reply.raw.setHeader('x-request-trace-id', traceId);
 }
 
 function writeStreamFrame(
@@ -585,7 +687,7 @@ async function recordUsageOnSuccess(
   streamCtx: StreamRequestContext,
   target: ResolvedTarget,
   candidate: ResolvedCandidate,
-  usage: { inputTokens: number; outputTokens: number; totalTokens: number } | null,
+  usage: { inputTokens: number; outputTokens: number; totalTokens: number; cacheReadTokens: number; cacheWriteTokens: number } | null,
   latencyMs: number,
   stickyHit: boolean,
 ): Promise<void> {
@@ -604,6 +706,8 @@ async function recordUsageOnSuccess(
     inputTokens: usage?.inputTokens ?? null,
     outputTokens: usage?.outputTokens ?? null,
     totalTokens: usage?.totalTokens ?? null,
+    cacheReadTokens: usage?.cacheReadTokens ?? null,
+    cacheWriteTokens: usage?.cacheWriteTokens ?? null,
     status: 'success',
     errorCode: null,
     latencyMs,

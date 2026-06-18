@@ -21,7 +21,6 @@ It includes:
 - API key.
 - Supported real model names.
 - Request and token quotas.
-- RPM and TPM limits.
 - Enabled, frozen, and cooldown state.
 - Health status and recent error information.
 
@@ -41,20 +40,24 @@ The administrator can enable, disable, order, or weight candidates through the d
 
 ### ModelGroup
 
-`ModelGroup` is administrator-defined. Example names like `free`, `flash`, `pro`, or `auto` are only examples, not built-in enums.
+`ModelGroup` is **administrator-defined and starts empty by default**. It is not tied to any provider or vendor. The intended use is **functional grouping** — for example `coder`, `planner`, `write`, `fast`, `cheap`, `auto` — where each group contains public models that serve a similar purpose or role, regardless of which upstream provider they come from.
 
 Clients request a group exactly like a model:
 
 ```json
 {
-  "model": "flash",
+  "model": "coder",
   "messages": []
 }
 ```
 
 Model group names and public model names must be globally unique. The system must reject a new model or group if its name conflicts with an existing target.
 
-First version recommendation: groups contain `PublicModel` entries, not raw upstream keys. This keeps the admin model clean.
+**First version recommendation:**
+
+- Groups contain `PublicModel` entries, not raw upstream keys. This keeps the admin model clean.
+- **No model groups are created automatically.** When a new upstream key is added, its models are exposed as individual public models only. Administrators manually create groups and assign public models to them through the dashboard.
+- The routing policy within a group is **linear priority fallback** (`priority`-only). The first available candidate (lowest `priority` number) is tried; if it fails with a recoverable error, the next candidate is tried.
 
 ### App
 
@@ -129,7 +132,7 @@ For every gateway request:
 6. Build the candidate list of `UpstreamKey + realModelName`.
 7. Compute the conversation fingerprint.
 8. Reuse an existing sticky binding if the bound upstream key and real model are still valid candidates and the key is enabled, not frozen, not cooled down, and not over quota.
-9. Otherwise choose a new candidate by routing policy and write or update the sticky binding.
+9. Otherwise choose a new candidate by **linear priority fallback** (lowest `priority` first) and write or update the sticky binding.
 10. Convert the request through the selected provider adapter.
 11. Stream or return the upstream response.
 12. Record usage metadata, token counts, latency, status, and selected upstream key.
@@ -147,9 +150,9 @@ Supported quota dimensions:
 - Input tokens.
 - Output tokens.
 - Total tokens.
-- RPM.
-- TPM.
 - Periodic limits, such as day, month, or total.
+
+**RPM and TPM tracking are not implemented in the current milestone.** Upstream-reported rate limits trigger cooldowns, not local RPM/TPM counters.
 
 When an upstream key reaches its quota:
 
@@ -169,13 +172,15 @@ MVP external APIs:
 
 - `POST /v1/messages`, compatible with Anthropic Messages.
 - `POST /v1/chat/completions`, compatible with OpenAI Chat Completions.
-- Streaming support for both protocols.
+- `POST /v1/responses`, compatible with OpenAI Responses API (Codex / GPT-5.5+).
+- Streaming support for all three protocols.
 - `GET /v1/models` for accessible public models and model groups.
 
 MVP provider adapters:
 
 - Anthropic-compatible.
 - OpenAI-compatible.
+- Codex.
 
 Future provider adapters can be added per provider:
 

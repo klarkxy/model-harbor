@@ -2,7 +2,7 @@
 
 ## Goal
 
-The MVP proves that an administrator can configure ModelHarbor entirely through the dashboard and that clients can call Anthropic Messages or OpenAI Chat Completions through a routed upstream key.
+The MVP proves that an administrator can configure ModelHarbor entirely through the dashboard and that clients can call Anthropic Messages, OpenAI Chat Completions, or OpenAI Responses API through a routed upstream key.
 
 The MVP is complete when:
 
@@ -11,6 +11,7 @@ The MVP is complete when:
 - Consumer keys can be granted access to selected models or groups.
 - `/v1/messages` works in non-stream and stream modes.
 - `/v1/chat/completions` works in non-stream and stream modes.
+- `/v1/responses` works in non-stream and stream modes.
 - Sticky routing reuses `upstreamKeyId + realModelName` while the candidate remains available.
 - Upstream-key quotas can freeze and restore route availability.
 - Usage records appear in the dashboard by app, consumer key, requested target, upstream key, and real model.
@@ -82,6 +83,7 @@ Deliverables:
 - Provider adapter interface.
 - Anthropic-compatible adapter.
 - OpenAI-compatible adapter.
+- Codex adapter.
 - Fake upstream server test utilities.
 - Internal chat request representation.
 - Request and response conversion for non-stream calls.
@@ -90,7 +92,8 @@ Acceptance:
 
 - Anthropic Messages requests can be converted to internal request shape.
 - OpenAI Chat Completions requests can be converted to internal request shape.
-- Internal request shape can be sent through Anthropic-compatible and OpenAI-compatible fake upstreams.
+- OpenAI Responses API requests can be converted to internal request shape.
+- Internal request shape can be sent through Anthropic-compatible, OpenAI-compatible, and Codex fake upstreams.
 - Provider errors are normalized.
 
 ## Milestone 4: Gateway Routing
@@ -99,6 +102,7 @@ Deliverables:
 
 - `POST /v1/messages`.
 - `POST /v1/chat/completions`.
+- `POST /v1/responses`.
 - `GET /v1/models`.
 - Consumer-key authentication.
 - Target resolution for public models and groups.
@@ -120,6 +124,7 @@ Deliverables:
 
 - Anthropic-compatible streaming.
 - OpenAI-compatible SSE streaming.
+- Codex streaming.
 - Stream event conversion.
 - Stream failure metadata.
 - Client disconnect handling where possible.
@@ -137,7 +142,7 @@ Acceptance:
 Deliverables:
 
 - Upstream-key quota counters.
-- Request, input token, output token, total token, RPM, and TPM limits.
+- Request, input token, output token, and total token limits.
 - Freeze and unfreeze behavior.
 - Period reset behavior.
 - Conversation fingerprint.

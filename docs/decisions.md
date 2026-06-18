@@ -64,17 +64,18 @@ This document records decisions that have already been made.
 
 ## Protocols
 
-- The project is Anthropic-first.
-- MVP must also support OpenAI-compatible clients.
+- The project supports Anthropic, OpenAI, and OpenAI Responses (Codex) protocols.
 - MVP external APIs:
   - `POST /v1/messages`.
   - `POST /v1/chat/completions`.
-  - streaming for both.
+  - `POST /v1/responses`.
+  - Streaming for all three protocols.
   - `GET /v1/models`.
 - Provider behavior should be implemented through provider adapters.
 - MVP provider adapters:
   - Anthropic-compatible.
   - OpenAI-compatible.
+  - Codex.
 
 ## Admin Authentication
 

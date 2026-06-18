@@ -12,6 +12,8 @@ import {
 } from '../db/index.js';
 import { protocolFor, type ProviderType, type SourceProtocol } from '@modelharbor/shared';
 import { NoRouteAvailableError, ValidationError } from '@modelharbor/shared';
+import { getProviderAdapter } from '../providers/index.js';
+import type { ProviderCapabilities } from '@modelharbor/shared';
 
 // One concrete upstream route the gateway can take: a (upstream key, real
 // model) pair. Carries everything the sender needs plus the upstream key's
@@ -59,6 +61,9 @@ export interface ResolvedCandidate {
   // Extra headers / body params to merge into the upstream request.
   extraHeaders: Record<string, string>;
   extraParams: Record<string, unknown>;
+  // Adapter capabilities at expand time. Used by the filter to drop candidates
+  // whose upstream does not support features the client request requires.
+  capabilities: ProviderCapabilities;
 }
 
 interface CandidateRow {
@@ -120,6 +125,10 @@ async function expandModelGroupCandidates(db: Db, modelGroupId: string): Promise
 }
 
 function toResolvedCandidate(row: CandidateRow): ResolvedCandidate {
+  const adapter = getProviderAdapter({
+    providerType: row.upstreamKey.providerType,
+    providerPresetId: row.upstreamKey.providerPresetId,
+  });
   return {
     upstreamKeyId: row.upstreamKey.id,
     upstreamKeyName: row.upstreamKey.name,
@@ -147,6 +156,7 @@ function toResolvedCandidate(row: CandidateRow): ResolvedCandidate {
       row.upstreamKey.defaultHeadersJson,
     ),
     extraParams: parseExtraParams(row.upstreamKey.extraParamsJson),
+    capabilities: adapter.capabilities,
   };
 }
 
@@ -262,7 +272,8 @@ export type FilterReason =
   | 'upstream_frozen'
   | 'upstream_cooldown'
   | 'protocol_mismatch'
-  | 'upstream_over_quota';
+  | 'upstream_over_quota'
+  | 'capability_mismatch';
 
 export interface FilterResult {
   accepted: ResolvedCandidate[];
@@ -271,6 +282,69 @@ export interface FilterResult {
   // protocol than the client. The gateway may use them as a cross-protocol
   // fallback when no same-protocol candidate exists.
   fallback: ResolvedCandidate[];
+}
+
+// Inspect the raw request and determine which adapter capabilities are required.
+// This is a lightweight check that looks at the wire-format request, not the IR.
+// It can be expanded as new features (vision, json mode, reasoning) are added.
+function requiredCapabilities(rawRequest: unknown): {
+  streaming?: boolean;
+  tools?: boolean;
+  vision?: boolean;
+  jsonMode?: boolean;
+} {
+  const required: ReturnType<typeof requiredCapabilities> = {};
+  if (!rawRequest || typeof rawRequest !== 'object') return required;
+  const req = rawRequest as Record<string, unknown>;
+
+  // Tools check: Anthropic `tools` / OpenAI `tools` or `tool_choice`.
+  if (Array.isArray(req['tools']) && req['tools'].length > 0) {
+    required.tools = true;
+  }
+  if (req['tool_choice'] !== undefined && req['tool_choice'] !== 'none') {
+    required.tools = true;
+  }
+
+  // JSON mode check: OpenAI `response_format` or `json_mode`.
+  if (req['response_format'] !== undefined || req['json_mode'] === true) {
+    required.jsonMode = true;
+  }
+
+  // Vision check: look for image content in messages.
+  const messages = req['messages'];
+  if (Array.isArray(messages)) {
+    for (const msg of messages) {
+      if (!msg || typeof msg !== 'object') continue;
+      const content = (msg as Record<string, unknown>)['content'];
+      if (Array.isArray(content)) {
+        for (const part of content) {
+          if (part && typeof part === 'object' && (part as Record<string, unknown>)['type'] === 'image') {
+            required.vision = true;
+          }
+        }
+      }
+    }
+  }
+
+  return required;
+}
+
+// Check whether a candidate's adapter supports the features required by the
+// request. Returns the first mismatched capability, or null if all are fine.
+function checkCapabilityMismatch(
+  candidate: ResolvedCandidate,
+  required: ReturnType<typeof requiredCapabilities>,
+): FilterReason | null {
+  if (required.tools && !candidate.capabilities.supportsTools) {
+    return 'capability_mismatch';
+  }
+  if (required.vision && !candidate.capabilities.supportsVision) {
+    return 'capability_mismatch';
+  }
+  if (required.jsonMode && !candidate.capabilities.supportsJsonMode) {
+    return 'capability_mismatch';
+  }
+  return null;
 }
 
 // Filter the candidate list for a specific request. Applies all non-protocol
@@ -282,8 +356,14 @@ export interface FilterResult {
 //   - `dropped`: candidates removed by a filter, with the reason
 export function filterCandidates(
   candidates: ResolvedCandidate[],
-  args: { sourceProtocol: SourceProtocol; now: Date; quotaExceeded?: ReadonlySet<string> },
+  args: {
+    sourceProtocol: SourceProtocol;
+    now: Date;
+    quotaExceeded?: ReadonlySet<string>;
+    rawRequest?: unknown;
+  },
 ): FilterResult {
+  const required = requiredCapabilities(args.rawRequest);
   const accepted: ResolvedCandidate[] = [];
   const fallback: ResolvedCandidate[] = [];
   const dropped: Array<{ candidate: ResolvedCandidate; reason: FilterReason }> = [];
@@ -311,6 +391,11 @@ export function filterCandidates(
     }
     if (args.quotaExceeded && args.quotaExceeded.has(c.upstreamKeyId)) {
       dropped.push({ candidate: c, reason: 'upstream_over_quota' });
+      continue;
+    }
+    const mismatch = checkCapabilityMismatch(c, required);
+    if (mismatch) {
+      dropped.push({ candidate: c, reason: mismatch });
       continue;
     }
     if (c.endpointProtocol !== args.sourceProtocol) {

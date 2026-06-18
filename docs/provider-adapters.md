@@ -26,6 +26,7 @@ MVP adapters:
 
 - `anthropic_compatible`
 - `openai_compatible`
+- `codex` (OpenAI Responses API / GPT-5.5+)
 
 Official provider presets are kept in `apps/api/src/modules/providers/presets.ts`. Each preset can declare one or more endpoints, so a single upstream key can serve both Anthropic- and OpenAI-protocol clients. Presets cover mainstream international and China-region providers such as OpenAI, Anthropic, DeepSeek, Moonshot, MiniMax, OpenRouter, OpenCode Go, OpenCode Zen, Groq, Together, Cerebras, Fireworks, xAI, Qwen, Zhipu, Baichuan, ByteDance Volcano Ark, Tencent Hunyuan, Baidu Qianfan, StepFun, and SiliconFlow (硅基流动).
 
@@ -135,14 +136,13 @@ Upstream API keys must never be logged or returned in API responses.
 
 Adapters must convert provider stream events into the client-facing protocol requested by the caller.
 
-MVP required conversions:
+**Same-protocol streaming is supported:**
 
-- Anthropic-compatible upstream to Anthropic client stream.
-- Anthropic-compatible upstream to OpenAI client stream when OpenAI clients route to an Anthropic-compatible upstream.
-- OpenAI-compatible upstream to OpenAI client stream.
-- OpenAI-compatible upstream to Anthropic client stream when Anthropic clients route to an OpenAI-compatible upstream.
+- Anthropic-compatible upstream → Anthropic client stream.
+- OpenAI-compatible upstream → OpenAI client stream.
+- Codex upstream → Codex client stream.
 
-If a cross-protocol streaming conversion is not ready, the route should fail with a clear unsupported-route error instead of silently returning malformed streams.
+**Cross-protocol streaming is not yet supported.** If a cross-protocol route is selected (e.g. an OpenAI client routes to an Anthropic-compatible upstream), the gateway returns a clear `unsupported-route` error for stream requests. Non-stream requests handle cross-protocol conversion through the adapter's `normalizeResponse`.
 
 ## Usage Extraction
 

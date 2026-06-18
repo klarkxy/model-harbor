@@ -47,6 +47,7 @@ import {
   upsertStickyBinding,
 } from '../sticky/index.js';
 import { getEnabledQuotaPeriods, recordQuotaUsage, wouldExceedQuota } from '../quota/index.js';
+import { generateTraceId, writeTraceLogEntry, upsertConsumptionStats } from '../observability/index.js';
 
 export interface GatewayRequestContext {
   db: Db;
@@ -55,6 +56,7 @@ export interface GatewayRequestContext {
   appId: string;
   timeoutMs?: number;
   defaultUpstreamTimeoutMs?: number;
+  traceId?: string;
 }
 
 export interface GatewaySuccess {
@@ -94,6 +96,8 @@ async function tryCandidates(
     ir: ChatRequestIR;
     sourceProtocol: SourceProtocol;
     candidates: ResolvedCandidate[];
+    traceId: string;
+    log: (input: Omit<import('../observability/trace-logs.js').TraceLogEntryInput, 'requestTraceId' | 'stepIndex'> & { step: import('../observability/trace-logs.js').TraceStep }) => Promise<void>;
   },
 ): Promise<GatewayOutcome> {
   let lastError: NormalizedProviderError | null = null;
@@ -103,6 +107,14 @@ async function tryCandidates(
   for (const candidate of args.candidates) {
     lastCandidate = candidate;
     attempts += 1;
+    await args.log({
+      step: 'candidate_attempt',
+      upstreamKeyId: candidate.upstreamKeyId,
+      upstreamKeyName: candidate.upstreamKeyName,
+      realModelName: candidate.realModelName,
+      endpointProtocol: candidate.endpointProtocol,
+      attemptOrder: attempts,
+    });
     const adapter = getProviderAdapter(candidate);
     const request = await buildHttpRequest(ctx, { ir: args.ir, candidate, adapter });
     console.error(
@@ -117,8 +129,27 @@ async function tryCandidates(
       console.error(
         `[modelharbor upstream] classified error: ${classified.error.category} providerCode=${classified.error.providerCode} message=${classified.error.providerMessage}`,
       );
+      await args.log({
+        step: 'candidate_fail',
+        upstreamKeyId: candidate.upstreamKeyId,
+        upstreamKeyName: candidate.upstreamKeyName,
+        realModelName: candidate.realModelName,
+        attemptOrder: attempts,
+        httpStatus: outcome.response?.status,
+        errorCategory: classified.error.category,
+        errorCode: classified.error.providerCode ?? undefined,
+        errorMessage: classified.error.providerMessage ?? undefined,
+      });
     }
     if (classified.kind === 'success') {
+      await args.log({
+        step: 'candidate_success',
+        upstreamKeyId: candidate.upstreamKeyId,
+        upstreamKeyName: candidate.upstreamKeyName,
+        realModelName: candidate.realModelName,
+        attemptOrder: attempts,
+        httpStatus: outcome.response?.status,
+      });
       return {
         ok: true,
         ir: classified.response,
@@ -141,6 +172,12 @@ async function tryCandidates(
             classified.error.providerMessage,
             new Date(),
           ),
+        });
+        await args.log({
+          step: 'cooldown_applied',
+          upstreamKeyId: candidate.upstreamKeyId,
+          upstreamKeyName: candidate.upstreamKeyName,
+          realModelName: candidate.realModelName,
         });
       } catch {
         // Cooldown is best-effort; never let a DB write failure surface to
@@ -356,9 +393,16 @@ async function runGateway(
 ): Promise<GatewayOutcome> {
   const start = Date.now();
   const now = new Date();
+  const traceId = ctx.traceId ?? generateTraceId();
+  let stepIndex = 0;
+  const log = (input: Omit<import('../observability/trace-logs.js').TraceLogEntryInput, 'requestTraceId' | 'stepIndex'> & { step: import('../observability/trace-logs.js').TraceStep }) =>
+    writeTraceLogEntry(ctx.db, { ...input, requestTraceId: traceId, stepIndex: ++stepIndex, now });
+
+  await log({ step: 'request_start', appId: ctx.appId, consumerKeyId: ctx.consumerKeyId, requestedTargetName: ir.requestedModel, sourceProtocol });
 
   // 1. Resolve target name to (type, id). Throws TargetNotFoundError on miss.
   const target = await resolveTargetByName(ctx.db, ir.requestedModel);
+  await log({ step: 'target_resolve', resolvedTargetType: target.targetType, resolvedTargetId: target.targetId });
 
   // 2. Make sure the consumer key is allowed to call this target.
   await assertConsumerKeyAccess(ctx.db, {
@@ -366,6 +410,7 @@ async function runGateway(
     targetType: target.targetType,
     targetId: target.targetId,
   });
+  await log({ step: 'access_allowed' });
 
   // 3. Expand + filter candidates. The router computes the set of upstream
   // keys that are currently over quota (M6) and passes it to the filter.
@@ -373,6 +418,7 @@ async function runGateway(
     targetType: target.targetType,
     targetId: target.targetId,
   });
+  await log({ step: 'candidates_expand', acceptedCount: all.length });
   // Compute quota state for the upstream keys in the candidate list. The check
   // is conservative: if any configured quota on the key is currently
   // exhausted, the key is dropped from the accepted set.
@@ -389,9 +435,16 @@ async function runGateway(
       quotaExceeded.add(id);
     }
   }
-  const { accepted, fallback } = filterCandidates(all, { sourceProtocol, now, quotaExceeded });
+  const { accepted, dropped, fallback } = filterCandidates(all, { sourceProtocol, now, quotaExceeded, rawRequest: ir.rawRequest });
+  await log({
+    step: 'candidates_filter',
+    acceptedCount: accepted.length,
+    droppedCount: dropped.length,
+    fallbackCount: fallback.length,
+  });
   const usableCandidates = accepted.length > 0 ? accepted : fallback;
   if (usableCandidates.length === 0) {
+    await log({ step: 'request_complete', finalOutcome: 'error', latencyMs: Date.now() - start });
     throw new NoRouteAvailableError('no available upstream for target');
   }
 
@@ -411,6 +464,7 @@ async function runGateway(
     fingerprint,
     now,
   });
+  await log({ step: 'sticky_check' });
   let stickyHit = false;
   let sorted = [...usableCandidates].sort((a, b) => a.priority - b.priority);
   if (stickyLookup.binding && isStickyBindingValid(stickyLookup.binding, sorted, { now })) {
@@ -423,12 +477,13 @@ async function runGateway(
       sorted = [bound, ...sorted.filter((c) => c !== bound)];
       stickyHit = true;
       void touchStickyBinding(ctx.db, { id: stickyLookup.binding.id, now });
+      await log({ step: 'sticky_hit', upstreamKeyId: bound.upstreamKeyId, upstreamKeyName: bound.upstreamKeyName, realModelName: bound.realModelName });
     }
   }
 
   // 5. Walk the candidate list with priority + failover. The first candidate
   // is either the sticky-bound one or the lowest-priority one.
-  const outcome = await tryCandidates(ctx, { ir, sourceProtocol, candidates: sorted });
+  const outcome = await tryCandidates(ctx, { ir, sourceProtocol, candidates: sorted, traceId, log });
   const latencyMs = Date.now() - start;
   // The selected candidate is on the success path or on the last-tried error
   // path. We attribute the usage to the *asked-for* target so group-level
@@ -499,6 +554,8 @@ async function runGateway(
         inputTokens: outcome.ok ? (usage?.inputTokens ?? null) : null,
         outputTokens: outcome.ok ? (usage?.outputTokens ?? null) : null,
         totalTokens: outcome.ok ? (usage?.totalTokens ?? null) : null,
+        cacheReadTokens: outcome.ok ? (usage?.cacheReadTokens ?? null) : null,
+        cacheWriteTokens: outcome.ok ? (usage?.cacheWriteTokens ?? null) : null,
         status: outcome.ok ? 'success' : 'error',
         errorCode: outcome.ok
           ? null
@@ -508,6 +565,35 @@ async function runGateway(
     } catch {
       /* usage record is best-effort */
     }
+    // Update daily consumption stats (M8). Best-effort.
+    try {
+      await upsertConsumptionStats(ctx.db, {
+        upstreamKeyId: candidate.upstreamKeyId,
+        realModelName: candidate.realModelName,
+        delta: {
+          requestCount: 1,
+          successCount: outcome.ok ? 1 : 0,
+          errorCount: outcome.ok ? 0 : 1,
+          cacheReadTokens: usage?.cacheReadTokens ?? 0,
+          cacheWriteTokens: usage?.cacheWriteTokens ?? 0,
+          inputTokens: usage?.inputTokens ?? 0,
+          outputTokens: usage?.outputTokens ?? 0,
+          totalTokens: usage?.totalTokens ?? 0,
+          latencyMs,
+        },
+        now,
+      });
+    } catch {
+      /* consumption stats are best-effort */
+    }
+    await log({
+      step: 'request_complete',
+      finalOutcome: outcome.ok ? 'success' : 'error',
+      upstreamKeyId: candidate.upstreamKeyId,
+      upstreamKeyName: candidate.upstreamKeyName,
+      realModelName: candidate.realModelName,
+      latencyMs,
+    });
   }
   return outcome;
 }

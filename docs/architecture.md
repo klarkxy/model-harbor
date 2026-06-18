@@ -27,6 +27,7 @@ The first version runs as one process or one container:
 client
   -> /v1/messages
   -> /v1/chat/completions
+  -> /v1/responses
   -> /v1/models
   -> Fastify gateway
   -> router core
@@ -123,7 +124,7 @@ This package should not import server-only or browser-only dependencies.
 
 ## Data Plane Flow
 
-For `POST /v1/messages` and `POST /v1/chat/completions`:
+For `POST /v1/messages`, `POST /v1/chat/completions`, and `POST /v1/responses`:
 
 1. Authenticate the consumer key.
 2. Resolve the owning app.
@@ -208,6 +209,7 @@ MVP adapters:
 
 - Anthropic-compatible.
 - OpenAI-compatible.
+- Codex (OpenAI Responses API).
 
 The router core must not contain provider-specific request fields except through adapter capabilities.
 
@@ -244,7 +246,6 @@ The first schema should include these model groups:
 - Sticky bindings.
 - Usage records.
 - Quota counters.
-- Health events.
 - Audit events.
 
 Security-sensitive fields:

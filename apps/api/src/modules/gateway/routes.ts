@@ -18,6 +18,7 @@ import {
   touchUpstreamLastUsed,
 } from './handler.js';
 import { handleStreamRequest, buildStreamRequest } from './stream-handler.js';
+import { generateTraceId } from '../observability/index.js';
 import { irToAnthropicResponse, irToCodexResponse, irToOpenAIResponse } from './response-shapes.js';
 import { anthropicErrorBody } from './error-shapes.js';
 import type { NormalizedProviderError } from '../providers/index.js';
@@ -53,9 +54,8 @@ export function registerGatewayRoutes(app: FastifyInstance, deps: GatewayRouteDe
   app.post('/v1/messages', { preHandler: guard }, async (req, reply) => {
     const consumer = req as FastifyRequest & { consumerKey: ConsumerKeyRow; app: AppRow };
     const b = (req.body ?? {}) as Record<string, unknown>;
+    const traceId = generateTraceId();
     if (b['stream'] === true) {
-      // Streaming path: hijacks the reply, writes SSE frames, ends the
-      // response. The handler resolves only after the stream is done.
       try {
         const streamCtx = buildStreamRequest('anthropic', req.body);
         await handleStreamRequest(
@@ -64,6 +64,7 @@ export function registerGatewayRoutes(app: FastifyInstance, deps: GatewayRouteDe
             secretKey,
             consumerKeyId: consumer.consumerKey.id,
             appId: consumer.app.id,
+            traceId,
           },
           streamCtx,
           reply,
@@ -83,7 +84,9 @@ export function registerGatewayRoutes(app: FastifyInstance, deps: GatewayRouteDe
         secretKey,
         consumerKeyId: consumer.consumerKey.id,
         appId: consumer.app.id,
+        traceId,
       });
+      reply.header('X-Request-Trace-Id', traceId);
       if (outcome.ok) {
         void touchUpstreamLastUsed(db, outcome.candidate.upstreamKeyId);
         const body = irToAnthropicResponse(outcome.ir, { model: outcome.candidate.realModelName });
@@ -107,6 +110,7 @@ export function registerGatewayRoutes(app: FastifyInstance, deps: GatewayRouteDe
   app.post('/v1/chat/completions', { preHandler: guard }, async (req, reply) => {
     const consumer = req as FastifyRequest & { consumerKey: ConsumerKeyRow; app: AppRow };
     const b = (req.body ?? {}) as Record<string, unknown>;
+    const traceId = generateTraceId();
     if (b['stream'] === true) {
       try {
         const streamCtx = buildStreamRequest('openai', req.body);
@@ -116,6 +120,7 @@ export function registerGatewayRoutes(app: FastifyInstance, deps: GatewayRouteDe
             secretKey,
             consumerKeyId: consumer.consumerKey.id,
             appId: consumer.app.id,
+            traceId,
           },
           streamCtx,
           reply,
@@ -135,7 +140,9 @@ export function registerGatewayRoutes(app: FastifyInstance, deps: GatewayRouteDe
         secretKey,
         consumerKeyId: consumer.consumerKey.id,
         appId: consumer.app.id,
+        traceId,
       });
+      reply.header('X-Request-Trace-Id', traceId);
       if (outcome.ok) {
         void touchUpstreamLastUsed(db, outcome.candidate.upstreamKeyId);
         const body = irToOpenAIResponse(outcome.ir, { model: outcome.candidate.realModelName });
@@ -160,6 +167,7 @@ export function registerGatewayRoutes(app: FastifyInstance, deps: GatewayRouteDe
   app.post('/v1/responses', { preHandler: guard }, async (req, reply) => {
     const consumer = req as FastifyRequest & { consumerKey: ConsumerKeyRow; app: AppRow };
     const b = (req.body ?? {}) as Record<string, unknown>;
+    const traceId = generateTraceId();
     if (b['stream'] === true) {
       try {
         const streamCtx = buildStreamRequest('codex', req.body);
@@ -169,6 +177,7 @@ export function registerGatewayRoutes(app: FastifyInstance, deps: GatewayRouteDe
             secretKey,
             consumerKeyId: consumer.consumerKey.id,
             appId: consumer.app.id,
+            traceId,
           },
           streamCtx,
           reply,
@@ -188,7 +197,9 @@ export function registerGatewayRoutes(app: FastifyInstance, deps: GatewayRouteDe
         secretKey,
         consumerKeyId: consumer.consumerKey.id,
         appId: consumer.app.id,
+        traceId,
       });
+      reply.header('X-Request-Trace-Id', traceId);
       if (outcome.ok) {
         void touchUpstreamLastUsed(db, outcome.candidate.upstreamKeyId);
         const body = irToCodexResponse(outcome.ir, { model: outcome.candidate.realModelName });

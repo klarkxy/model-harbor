@@ -12,11 +12,12 @@ export interface UsageRecordInput {
   sourceProtocol: SourceProtocol;
   providerType: ProviderType;
   stream: boolean;
-  // Always false in M5. Reserved for M6 sticky routing.
   stickyHit?: boolean;
   inputTokens: number | null;
   outputTokens: number | null;
   totalTokens: number | null;
+  cacheReadTokens: number | null;
+  cacheWriteTokens: number | null;
   status: 'success' | 'error';
   errorCode: string | null;
   latencyMs: number;
@@ -42,6 +43,8 @@ export async function writeUsageRecord(db: Db, input: UsageRecordInput): Promise
     inputTokens: input.inputTokens,
     outputTokens: input.outputTokens,
     totalTokens: input.totalTokens,
+    cacheReadTokens: input.cacheReadTokens,
+    cacheWriteTokens: input.cacheWriteTokens,
     status: input.status,
     errorCode: input.errorCode,
     latencyMs: input.latencyMs,

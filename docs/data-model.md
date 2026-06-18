@@ -158,8 +158,6 @@ Fields:
 - `inputTokenLimit`
 - `outputTokenLimit`
 - `totalTokenLimit`
-- `rpmLimit`
-- `tpmLimit`
 - `enabled`
 - `createdAt`
 - `updatedAt`
@@ -167,6 +165,7 @@ Fields:
 Constraints:
 
 - One active quota policy per upstream key for MVP.
+- RPM and TPM tracking are not implemented in the current milestone; rate-limit events are handled through cooldowns.
 
 ### upstream_key_counters
 
@@ -345,61 +344,6 @@ Notes:
 
 - Store metadata and statistics only by default.
 - Do not store prompt or completion bodies unless an explicit future admin setting enables it.
-
-### health_events
-
-Tracks upstream health and cooldown events.
-
-Fields:
-
-- `id`
-- `upstreamKeyId`
-- `eventType`
-- `status`
-- `errorCode`
-- `message`
-- `createdAt`
-
-### audit_events
-
-Tracks admin-side changes.
-
-Fields:
-
-- `id`
-- `adminUserId`
-- `action`
-- `entityType`
-- `entityId`
-- `summary`
-- `createdAt`
-
-Notes:
-
-- Do not store raw secrets in audit summaries.
-
-## Important Indexes
-
-Recommended indexes:
-
-- `consumer_keys.keyHash`
-- `consumer_keys.appId`
-- `consumer_key_access.consumerKeyId`
-- `target_names.name`
-- `public_model_candidates.publicModelId`
-- `model_group_members.modelGroupId`
-- `sticky_bindings.appId, consumerKeyId, requestedTargetName, conversationFingerprint`
-- `usage_records.createdAt`
-- `usage_records.appId, createdAt`
-- `usage_records.consumerKeyId, createdAt`
-- `usage_records.upstreamKeyId, createdAt`
-- `upstream_key_counters.upstreamKeyId, period, periodStartedAt`
-
-## Soft Delete
-
-MVP can use `enabled` and `revokedAt` before adding full soft-delete columns.
-
-Hard delete should be restricted when records have historical usage. Prefer disabling objects that are referenced by usage records.
 
 ## Secret Handling
 

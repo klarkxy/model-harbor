@@ -49,7 +49,7 @@ These should not complicate the MVP single-node path.
 
 Potential additions:
 
-- OpenAI Responses API.
+- OpenAI Responses API (Codex / GPT-5.5+).
 - Tool calling compatibility improvements.
 - Vision inputs.
 - JSON mode.

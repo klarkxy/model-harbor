@@ -14,6 +14,10 @@ import {
   getTargetBreakdown,
   getTotalsForWindow,
   getUpstreamKeyBreakdown,
+  getTraceTimeline,
+  listRecentTraces,
+  getConsumptionStats,
+  getDailyConsumptionSummary,
   todayWindow,
 } from '../observability/index.js';
 
@@ -75,5 +79,53 @@ export function registerObservabilityRoutes(
     const q = (req.query ?? {}) as { limit?: string };
     const limit = Math.min(500, Math.max(1, Number(q.limit ?? '100') || 100));
     return { items: await getRecentRequests(db, { limit }) };
+  });
+
+  app.get('/api/admin/usage/traces', async (req) => {
+    const q = (req.query ?? {}) as { limit?: string; since?: string };
+    const limit = Math.min(500, Math.max(1, Number(q.limit ?? '100') || 100));
+    const since = q.since ? new Date(Number(q.since)) : undefined;
+    return { items: await listRecentTraces(db, { limit, since }) };
+  });
+
+  app.get('/api/admin/usage/traces/:traceId', async (req) => {
+    const { traceId } = req.params as { traceId: string };
+    const timeline = await getTraceTimeline(db, traceId);
+    if (!timeline) {
+      return { error: 'Trace not found' };
+    }
+    return timeline;
+  });
+
+  app.get('/api/admin/usage/consumption', async (req) => {
+    const q = (req.query ?? {}) as {
+      upstreamKeyId?: string;
+      dayDate?: string;
+      limit?: string;
+      since?: string;
+      until?: string;
+    };
+    const limit = Math.min(500, Math.max(1, Number(q.limit ?? '100') || 100));
+    const since = q.since ? new Date(Number(q.since)) : undefined;
+    const until = q.until ? new Date(Number(q.until)) : undefined;
+    return {
+      items: await getConsumptionStats(db, {
+        upstreamKeyId: q.upstreamKeyId,
+        dayDate: q.dayDate,
+        limit,
+        since,
+        until,
+      }),
+    };
+  });
+
+  app.get('/api/admin/usage/consumption/daily', async (req) => {
+    const q = (req.query ?? {}) as { since?: string; until?: string; limit?: string };
+    const limit = Math.min(500, Math.max(1, Number(q.limit ?? '30') || 30));
+    const since = q.since ? new Date(Number(q.since)) : undefined;
+    const until = q.until ? new Date(Number(q.until)) : undefined;
+    return {
+      items: await getDailyConsumptionSummary(db, { since, until, limit }),
+    };
   });
 }

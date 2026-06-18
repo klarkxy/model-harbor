@@ -2,8 +2,6 @@ import { and, eq } from 'drizzle-orm';
 import { generateId } from '@modelharbor/shared';
 import {
   type Db,
-  modelGroupMembers,
-  modelGroups,
   publicModelCandidates,
   publicModels,
   targetNames,
@@ -12,7 +10,6 @@ import { getModelMappings, type ProviderPreset } from '../providers/presets.js';
 
 export interface OnboardingResult {
   publicModelIds: string[];
-  modelGroupId: string;
 }
 
 export interface OnboardingMapping {
@@ -39,12 +36,11 @@ export async function onboardUpstreamKey(
 export async function onboardUpstreamKeyWithMappings(
   db: Db,
   upstreamKeyId: string,
-  groupName: string,
+  _groupName: string, // kept for API compatibility but no longer used
   mappings: OnboardingMapping[],
 ): Promise<OnboardingResult> {
   const now = new Date();
   const publicModelIds: string[] = [];
-  let groupId = '';
 
   await db.transaction(async (tx) => {
     // 1. Ensure public models and candidates exist for every enabled mapping.
@@ -105,68 +101,9 @@ export async function onboardUpstreamKeyWithMappings(
         });
       }
     }
-
-    if (publicModelIds.length === 0) {
-      return { publicModelIds, modelGroupId: groupId };
-    }
-
-    // 2. Ensure the provider-level model group exists.
-    const existingGroup = await tx
-      .select({ id: modelGroups.id })
-      .from(modelGroups)
-      .where(eq(modelGroups.name, groupName))
-      .get();
-    if (existingGroup) {
-      groupId = existingGroup.id;
-    } else {
-      groupId = generateId('modelGroup');
-      await tx.insert(modelGroups).values({
-        id: groupId,
-        name: groupName,
-        displayName: groupName,
-        description: null,
-        enabled: true,
-        routingPolicy: 'priority',
-        createdAt: now,
-        updatedAt: now,
-      });
-      await tx.insert(targetNames).values({
-        id: `tn_${generateId('modelGroup').slice(-8)}`,
-        name: groupName,
-        targetType: 'model_group',
-        targetId: groupId,
-        createdAt: now,
-      });
-    }
-
-    // 3. Add all public models to the group (skip existing members).
-    for (const pmId of publicModelIds) {
-      const existingMember = await tx
-        .select({ id: modelGroupMembers.id })
-        .from(modelGroupMembers)
-        .where(
-          and(
-            eq(modelGroupMembers.modelGroupId, groupId),
-            eq(modelGroupMembers.publicModelId, pmId),
-          ),
-        )
-        .get();
-      if (!existingMember) {
-        await tx.insert(modelGroupMembers).values({
-          id: generateId('modelGroup') + '_m',
-          modelGroupId: groupId,
-          publicModelId: pmId,
-          enabled: true,
-          priority: 100,
-          weight: 1,
-          createdAt: now,
-          updatedAt: now,
-        });
-      }
-    }
   });
 
-  return { publicModelIds, modelGroupId: groupId };
+  return { publicModelIds };
 }
 
 export interface UpstreamKeyCandidateMapping {

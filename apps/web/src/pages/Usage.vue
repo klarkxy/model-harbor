@@ -16,11 +16,15 @@ import {
 } from 'naive-ui';
 import {
   usageApi,
+  traceApi,
+  consumptionApi,
   type UsageBreakdownEntry,
   type UsageRecentRow,
   type UsageTargetBreakdownEntry,
   type UsageTotals,
   type UsageWindow,
+  type TraceSummary,
+  type DailyConsumptionSummary,
 } from '../api/admin.js';
 
 const { t } = useI18n();
@@ -38,6 +42,8 @@ const consumerKeys = ref<UsageBreakdownEntry[]>([]);
 const upstreamKeys = ref<UsageBreakdownEntry[]>([]);
 const targets = ref<UsageTargetBreakdownEntry[]>([]);
 const recent = ref<UsageRecentRow[]>([]);
+const traces = ref<TraceSummary[]>([]);
+const consumption = ref<DailyConsumptionSummary[]>([]);
 const loading = ref(false);
 const lastError = ref<string | null>(null);
 
@@ -46,13 +52,15 @@ async function refresh(): Promise<void> {
   lastError.value = null;
   try {
     const w = windowKind.value;
-    const [t2, a, c, u, tg, r] = await Promise.all([
+    const [t2, a, c, u, tg, r, tr, co] = await Promise.all([
       usageApi.totals(w),
       usageApi.byApp(w),
       usageApi.byConsumerKey(w),
       usageApi.byUpstreamKey(w),
       usageApi.byTarget(w),
       usageApi.recent(100),
+      traceApi.list(50),
+      consumptionApi.daily({ limit: 30 }),
     ]);
     totals.value = t2;
     apps.value = a.items;
@@ -60,6 +68,8 @@ async function refresh(): Promise<void> {
     upstreamKeys.value = u.items;
     targets.value = tg.items;
     recent.value = r.items;
+    traces.value = tr.items;
+    consumption.value = co.items;
   } catch (err) {
     lastError.value = (err as Error).message;
   } finally {
@@ -187,10 +197,81 @@ const recentColumns = computed<DataTableColumns<UsageRecentRow>>(() => [
         : `${row.inputTokens ?? 0} / ${row.outputTokens ?? 0} / ${row.totalTokens}`,
   },
   {
+    title: t('usage.columns.cacheTokens'),
+    key: 'cacheTokens',
+    width: 160,
+    render: (row) =>
+      row.cacheReadTokens === null && row.cacheWriteTokens === null
+        ? '—'
+        : `${row.cacheReadTokens ?? 0} / ${row.cacheWriteTokens ?? 0}`,
+  },
+  {
     title: t('usage.columns.error'),
     key: 'errorCode',
     width: 160,
     render: (row) => (row.errorCode ? row.errorCode : '—'),
+  },
+]);
+
+const traceColumns = computed<DataTableColumns<TraceSummary>>(() => [
+  {
+    title: t('usage.columns.traceId'),
+    key: 'requestTraceId',
+    width: 240,
+    ellipsis: { tooltip: true },
+  },
+  {
+    title: t('usage.columns.target'),
+    key: 'requestedTargetName',
+    width: 180,
+    ellipsis: { tooltip: true },
+  },
+  {
+    title: t('usage.columns.sourceProtocol'),
+    key: 'sourceProtocol',
+    width: 120,
+  },
+  {
+    title: t('usage.columns.outcome'),
+    key: 'finalOutcome',
+    width: 110,
+    render: (row) =>
+      h(
+        NTag,
+        { size: 'small', type: row.finalOutcome === 'success' ? 'success' : 'default' },
+        () => row.finalOutcome ?? '—',
+      ),
+  },
+  {
+    title: t('usage.columns.time'),
+    key: 'createdAt',
+    width: 200,
+    render: (row) => new Date(row.createdAt).toLocaleString(),
+  },
+]);
+
+const consumptionColumns = computed<DataTableColumns<DailyConsumptionSummary>>(() => [
+  {
+    title: t('usage.columns.dayDate'),
+    key: 'dayDate',
+    width: 140,
+  },
+  {
+    title: t('usage.columns.requests'),
+    key: 'totalRequests',
+    render: (row) => row.totalRequests.toLocaleString(),
+  },
+  {
+    title: t('usage.columns.tokensInOut'),
+    key: 'tokens',
+    render: (row) =>
+      `${row.totalInputTokens.toLocaleString()} / ${row.totalOutputTokens.toLocaleString()}`,
+  },
+  {
+    title: t('usage.columns.cacheTokens'),
+    key: 'cacheTokens',
+    render: (row) =>
+      `${row.totalCacheReadTokens.toLocaleString()} / ${row.totalCacheWriteTokens.toLocaleString()}`,
   },
 ]);
 </script>
@@ -296,6 +377,30 @@ const recentColumns = computed<DataTableColumns<UsageRecentRow>>(() => [
           :row-key="(r) => r.id"
           :max-height="480"
           :empty="h(NEmpty, { description: t('usage.empty.recent') })"
+        />
+      </NCard>
+
+      <NCard :title="t('usage.traces')">
+        <NDataTable
+          :columns="traceColumns"
+          :data="traces"
+          :bordered="false"
+          :single-line="false"
+          :row-key="(r) => r.requestTraceId"
+          :max-height="360"
+          :empty="h(NEmpty, { description: t('usage.empty.traces') })"
+        />
+      </NCard>
+
+      <NCard :title="t('usage.consumption')">
+        <NDataTable
+          :columns="consumptionColumns"
+          :data="consumption"
+          :bordered="false"
+          :single-line="false"
+          :row-key="(r) => r.dayDate"
+          :max-height="360"
+          :empty="h(NEmpty, { description: t('usage.empty.consumption') })"
         />
       </NCard>
 

@@ -114,6 +114,8 @@ export type ProviderStreamEventResult =
       inputTokens: number;
       outputTokens: number;
       totalTokens: number;
+      cacheReadTokens?: number;
+      cacheWriteTokens?: number;
       clientFrame?: ProviderStreamClientFrame | ProviderStreamClientFrame[];
     }
   | {

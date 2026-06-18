@@ -118,6 +118,16 @@ const messages: Messages = {
     errorGeneric: '登录失败',
     hint: '首次运行？启动时会从服务器环境创建引导管理员。',
   },
+  oauthCallback: {
+    loading: '正在完成 OAuth 授权...',
+    success: '授权完成，上游密钥已保存。',
+    redirectHint: '正在跳转到上游密钥列表...',
+    goToKeys: '前往上游密钥',
+    errorTitle: '授权失败',
+    errorGeneric: '无法完成授权。',
+    errorMissingParams: '缺少授权码或 state 参数。',
+    errorProvider: '提供商返回错误：{error}',
+  },
   overview: {
     banner: {
       tag: 'v0.1.0',
@@ -201,13 +211,19 @@ const messages: Messages = {
       authType: {
         label: '认证方式',
         pat: 'PAT（静态令牌）',
-        cozeOauthJwt: 'OAuth JWT（推荐）',
-        codexOauth: 'Codex OAuth（刷新令牌）',
+        cozeOauthJwt: 'OAuth JWT',
+        cozeOauthPkce: 'OAuth PKCE（浏览器）',
+        codexOauth: 'Codex OAuth（浏览器或刷新令牌）',
       },
       codex: {
-        refreshToken: 'Refresh token',
+        refreshToken: 'Refresh token（手动回退）',
+        redirectUri: 'Redirect URI',
         clientId: 'Client ID（可选）',
         tokenUrl: 'Token URL（可选）',
+      },
+      cozePkce: {
+        clientId: 'OAuth 客户端 ID',
+        redirectUri: 'Redirect URI',
       },
       coze: {
         appId: '应用 ID',
@@ -245,6 +261,7 @@ const messages: Messages = {
         refreshToken: '粘贴 Codex OAuth refresh token',
         clientId: 'app_EMoamEEZ73f0CkXaXp7hrann',
         tokenUrl: 'https://auth.openai.com/oauth/token',
+        cozeClientId: '从 Coze OAuth 应用粘贴',
       },
     },
     ping: {
@@ -260,6 +277,13 @@ const messages: Messages = {
     validation: {
       required: '请填写所有必填项',
       modelMappings: '至少需要一条启用的模型映射',
+    },
+    oauth: {
+      authorize: '浏览器授权',
+      reauthorize: '重新授权',
+      windowOpened: '授权窗口已打开，请在完成登录后返回。',
+      codexHint: '点击授权将在新标签页打开 OpenAI，回调页会自动保存 refresh token。',
+      cozeHint: '点击授权将在新标签页打开 Coze，回调页会自动保存 refresh token。',
     },
   },
   publicModels: {
@@ -442,12 +466,16 @@ const messages: Messages = {
     byUpstreamKey: '按上游密钥',
     byTarget: '按目标',
     recentRequests: '最近请求',
+    traces: '链路追踪',
+    consumption: '每日消耗',
     empty: {
       app: '该时间窗口内没有应用流量',
       consumerKey: '该时间窗口内没有消费密钥流量',
       upstreamKey: '该时间窗口内没有上游流量',
       target: '该时间窗口内没有目标流量',
       recent: '暂无网关流量',
+      traces: '暂无链路追踪记录',
+      consumption: '暂无消耗记录',
     },
     columns: {
       name: '名称',
@@ -463,7 +491,12 @@ const messages: Messages = {
       status: '状态',
       latency: '延迟',
       tokensInOutTotal: 'Token（入/出/总计）',
+      cacheTokens: '缓存（读/写）',
       error: '错误',
+      traceId: '追踪 ID',
+      sourceProtocol: '来源协议',
+      outcome: '结果',
+      dayDate: '日期',
     },
     loadError: '加载失败：{message}',
   },

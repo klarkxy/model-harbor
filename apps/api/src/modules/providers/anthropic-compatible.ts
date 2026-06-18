@@ -119,6 +119,8 @@ export function createAnthropicCompatibleAdapter(): ProviderAdapter {
       const text = extractAssistantText(json.content ?? []);
       const input = json.usage?.input_tokens ?? 0;
       const output = json.usage?.output_tokens ?? 0;
+      const cacheRead = json.usage?.cache_read_input_tokens ?? 0;
+      const cacheWrite = json.usage?.cache_creation_input_tokens ?? 0;
       return {
         id: json.id,
         model: json.model,
@@ -128,6 +130,8 @@ export function createAnthropicCompatibleAdapter(): ProviderAdapter {
           inputTokens: input,
           outputTokens: output,
           totalTokens: input + output,
+          cacheReadTokens: cacheRead > 0 ? cacheRead : undefined,
+          cacheWriteTokens: cacheWrite > 0 ? cacheWrite : undefined,
         },
         rawResponse: json,
       };
@@ -222,6 +226,8 @@ export function createAnthropicCompatibleAdapter(): ProviderAdapter {
             inputTokens: -1,
             outputTokens: usage.output_tokens,
             totalTokens: -1,
+            cacheReadTokens: usage.cache_read_input_tokens,
+            cacheWriteTokens: usage.cache_creation_input_tokens,
           };
         }
         return { kind: 'stop', reason };
@@ -269,10 +275,14 @@ export function createAnthropicCompatibleAdapter(): ProviderAdapter {
       if (!json || typeof json !== 'object' || !json.usage) return null;
       const input = json.usage.input_tokens ?? 0;
       const output = json.usage.output_tokens ?? 0;
+      const cacheRead = json.usage.cache_read_input_tokens ?? 0;
+      const cacheWrite = json.usage.cache_creation_input_tokens ?? 0;
       return {
         inputTokens: input,
         outputTokens: output,
         totalTokens: input + output,
+        cacheReadTokens: cacheRead > 0 ? cacheRead : undefined,
+        cacheWriteTokens: cacheWrite > 0 ? cacheWrite : undefined,
       };
     },
   };

@@ -116,6 +116,16 @@ const messages = {
     errorGeneric: 'Sign-in failed',
     hint: 'First run? The bootstrap admin is created from the server env on startup.',
   },
+  oauthCallback: {
+    loading: 'Completing OAuth authorization...',
+    success: 'Authorization complete. The upstream key has been saved.',
+    redirectHint: 'Redirecting to upstream keys...',
+    goToKeys: 'Go to Upstream Keys',
+    errorTitle: 'Authorization failed',
+    errorGeneric: 'Could not complete authorization.',
+    errorMissingParams: 'Missing authorization code or state.',
+    errorProvider: 'Provider returned an error: {error}',
+  },
   overview: {
     banner: {
       tag: 'v0.1.0',
@@ -200,13 +210,19 @@ const messages = {
       authType: {
         label: 'Authentication',
         pat: 'PAT (static token)',
-        cozeOauthJwt: 'OAuth JWT (recommended)',
-        codexOauth: 'Codex OAuth (refresh token)',
+        cozeOauthJwt: 'OAuth JWT',
+        cozeOauthPkce: 'OAuth PKCE (browser)',
+        codexOauth: 'Codex OAuth (browser or refresh token)',
       },
       codex: {
-        refreshToken: 'Refresh token',
+        refreshToken: 'Refresh token (manual fallback)',
+        redirectUri: 'Redirect URI',
         clientId: 'Client ID (optional)',
         tokenUrl: 'Token URL (optional)',
+      },
+      cozePkce: {
+        clientId: 'OAuth client ID',
+        redirectUri: 'Redirect URI',
       },
       coze: {
         appId: 'App ID',
@@ -244,6 +260,7 @@ const messages = {
         refreshToken: 'Paste the Codex OAuth refresh token',
         clientId: 'app_EMoamEEZ73f0CkXaXp7hrann',
         tokenUrl: 'https://auth.openai.com/oauth/token',
+        cozeClientId: 'Paste from your Coze OAuth app',
       },
     },
     ping: {
@@ -259,6 +276,15 @@ const messages = {
     validation: {
       required: 'Please fill in all required fields',
       modelMappings: 'At least one enabled model mapping is required',
+    },
+    oauth: {
+      authorize: 'Authorize with browser',
+      reauthorize: 'Re-authorize',
+      windowOpened: 'Authorization window opened. Complete the login there to finish.',
+      codexHint:
+        'Clicking Authorize opens OpenAI in a new tab. The callback page will store the refresh token automatically.',
+      cozeHint:
+        'Clicking Authorize opens Coze in a new tab. The callback page will store the refresh token automatically.',
     },
   },
   publicModels: {
@@ -441,12 +467,16 @@ const messages = {
     byUpstreamKey: 'By upstream key',
     byTarget: 'By target',
     recentRequests: 'Recent requests',
+    traces: 'Trace logs',
+    consumption: 'Daily consumption',
     empty: {
       app: 'No app traffic in this window',
       consumerKey: 'No consumer key traffic in this window',
       upstreamKey: 'No upstream traffic in this window',
       target: 'No target traffic in this window',
       recent: 'No gateway traffic yet',
+      traces: 'No trace logs yet',
+      consumption: 'No consumption records yet',
     },
     columns: {
       name: 'Name',
@@ -462,7 +492,12 @@ const messages = {
       status: 'Status',
       latency: 'Latency',
       tokensInOutTotal: 'Tokens (in/out/total)',
+      cacheTokens: 'Cache (read/write)',
       error: 'Error',
+      traceId: 'Trace ID',
+      sourceProtocol: 'Source protocol',
+      outcome: 'Outcome',
+      dayDate: 'Date',
     },
     loadError: 'Failed to load: {message}',
   },

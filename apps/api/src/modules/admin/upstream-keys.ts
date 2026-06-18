@@ -58,6 +58,13 @@ import {
   safeJsonString,
 } from './helpers.js';
 
+function extractAuthConfig(value: unknown): Record<string, unknown> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return parseJsonRecord(typeof value === 'string' ? value : null) ?? {};
+}
+
 export interface AuditMeta {
   actorAdminId: string | null;
   actorUsername: string | null;
@@ -552,8 +559,7 @@ async function discoverUpstreamModels(
       if (!apiKey) throw new ValidationError('apiKey is required');
       authHeader = `Bearer ${apiKey}`;
     } else {
-      const authConfig =
-        parseJsonRecord(typeof body.authConfig === 'string' ? body.authConfig : null) ?? {};
+      const authConfig = extractAuthConfig(body.authConfig);
       authHeader = await resolveAuthorizationHeaderFromCredentials(baseUrl, secretKey, {
         authType,
         authConfig,
@@ -802,8 +808,7 @@ export function registerUpstreamKeyRoutes(app: FastifyInstance, deps: UpstreamKe
       apiKeyCiphertext = enc.ciphertext;
       apiKeyPrefix = enc.prefix;
     } else {
-      const rawAuthConfig =
-        parseJsonRecord(typeof body.authConfig === 'string' ? body.authConfig : null) ?? {};
+      const rawAuthConfig = extractAuthConfig(body.authConfig);
       const validated = validateAuthConfig(authType, rawAuthConfig);
       authConfigCiphertext = encryptSecret(JSON.stringify(validated), secretKey).ciphertext;
     }
@@ -977,8 +982,7 @@ export function registerUpstreamKeyRoutes(app: FastifyInstance, deps: UpstreamKe
     }
     if (body.authConfig !== undefined) {
       const currentAuthType = (update.authType ?? existing.authType) as UpstreamAuthType;
-      const rawAuthConfig =
-        parseJsonRecord(typeof body.authConfig === 'string' ? body.authConfig : null) ?? {};
+      const rawAuthConfig = extractAuthConfig(body.authConfig);
       const validated = validateAuthConfig(currentAuthType, rawAuthConfig);
       update.authConfigCiphertext = encryptSecret(JSON.stringify(validated), secretKey).ciphertext;
     }

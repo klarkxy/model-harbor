@@ -23,6 +23,7 @@ ModelHarbor is a lightweight, dashboard-first LLM API router. It helps administr
 | ----------------------- | --------------------------- | ---------------------------------- |
 | Anthropic Messages      | `POST /v1/messages`         | ✅ Supported (stream + non-stream) |
 | OpenAI Chat Completions | `POST /v1/chat/completions` | ✅ Supported (stream + non-stream) |
+| OpenAI Responses        | `POST /v1/responses`        | ✅ Supported (stream + non-stream) |
 | OpenAI Models List      | `GET /v1/models`            | ✅ Supported                       |
 
 ---

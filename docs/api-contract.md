@@ -104,6 +104,37 @@ Response:
 - Return OpenAI-compatible chat completion response for non-stream requests.
 - Return OpenAI-compatible SSE chunks for stream requests.
 
+### POST /v1/responses
+
+OpenAI Responses API-compatible endpoint (Codex / GPT-5.5+).
+
+Required request fields:
+
+- `model`
+- `input`
+
+Supported MVP request fields:
+
+- `model`
+- `input`
+- `instructions` (system prompt)
+- `max_output_tokens`
+- `temperature`
+- `top_p`
+- `stream`
+- `metadata`
+
+Behavior:
+
+- `model` can be a public model name or model group name.
+- The route resolves through ModelHarbor permissions and routing.
+- Streaming is supported when `stream: true`.
+
+Response:
+
+- Return OpenAI Responses-compatible non-stream response for non-stream requests.
+- Return OpenAI Responses-compatible stream events for stream requests.
+
 ### GET /v1/models
 
 Returns targets accessible to the current consumer key.
@@ -233,9 +264,7 @@ Request:
     "requestLimit": 100000,
     "inputTokenLimit": 10000000,
     "outputTokenLimit": 10000000,
-    "totalTokenLimit": 20000000,
-    "rpmLimit": 60,
-    "tpmLimit": 120000
+    "totalTokenLimit": 20000000
   }
 }
 ```
@@ -420,34 +449,33 @@ Replaces access grants transactionally.
 
 ### Observability
 
-#### GET /api/admin/usage/summary
+#### GET /api/admin/usage/totals
 
-Query parameters:
+Query parameters: `window` (`today`, `24h`, `7d`).
 
-- `from`
-- `to`
-- `appId`
-- `consumerKeyId`
-- `upstreamKeyId`
-- `targetName`
+Returns aggregated totals for requests, tokens, failures, latency, and sticky hit rate.
 
-Response includes:
+#### GET /api/admin/usage/by-app
 
-- Request count.
-- Input tokens.
-- Output tokens.
-- Total tokens.
-- Failure count.
-- Average latency.
-- Sticky hit count.
+Query parameters: `window`. Returns per-app usage breakdown.
 
-#### GET /api/admin/usage/records
+#### GET /api/admin/usage/by-consumer-key
 
-Returns recent usage records with filters and pagination.
+Query parameters: `window`. Returns per-consumer-key breakdown.
 
-#### GET /api/admin/upstream-keys/:id/usage
+#### GET /api/admin/usage/by-upstream-key
 
-Returns quota and usage for one upstream key.
+Query parameters: `window`. Returns per-upstream-key breakdown.
+
+#### GET /api/admin/usage/by-target
+
+Query parameters: `window`. Returns per-public-model / per-group breakdown.
+
+#### GET /api/admin/usage/recent
+
+Query parameters: `limit` (max 500, default 100).
+
+Returns recent usage records with request, target, upstream key, latency, and status.
 
 ## Naming And IDs
 
@@ -459,8 +487,6 @@ MVP can use string IDs with prefixes:
 - `uk_`
 - `pm_`
 - `mg_`
-- `sb_`
-- `usr_`
 
 Public `name` fields used by clients should be lowercase-friendly and URL-safe:
 
