@@ -43,7 +43,7 @@
 
 ---
 
-## 阶段二：Provider Capabilities 路由过滤
+## 阶段二：Provider Capabilities 路由过滤 ✅ 已完成
 
 ### 问题
 
@@ -51,32 +51,29 @@
 
 > "Each adapter must declare capabilities so the router can filter incompatible candidates before sending traffic."
 
-当前每个 adapter 确实声明了 `capabilities`（如 `supportsTools`, `supportsVision`, `supportsJsonMode` 等），但 `router/candidates.ts` 的 `filterCandidates` **只检查协议匹配**，完全没有使用 capabilities 来过滤候选。
+当前每个 adapter 已声明 `capabilities`（如 `supportsTools`, `supportsVision`, `supportsJsonMode` 等），`router/candidates.ts` 的 `filterCandidates` 也已根据请求内容过滤不兼容候选。
 
-这意味着：如果客户端请求包含 `tools` 或 `vision` 内容，但选中的上游 adapter 不支持这些功能，请求会在上游失败而不是在路由阶段被拦截。
+### 实现
 
-### 目标
-
-- 在 `filterCandidates` 中增加 capabilities 检查
-- 新增过滤原因：`capability_mismatch`
-- 客户端请求包含工具调用 / vision / JSON mode / thinking 等高级功能时，自动过滤掉不支持这些功能的候选
-- 保持向后兼容：纯文本请求不受此过滤影响
+- `packages/shared/src/capabilities.ts` 提供 `requiredCapabilities(rawRequest)` 与 `requestRequiresCapability(rawRequest, capability)`。
+- `apps/api/src/modules/router/candidates.ts` 的 `filterCandidates` 在协议匹配前检查 `streaming` / `tools` / `toolChoice` / `vision` / `jsonMode` / `thinking`，不匹配时以 `capability_mismatch` 原因丢弃候选。
+- `ResolvedCandidate` 强制携带 `capabilities`，所有 adapter 均已声明。
 
 ### 涉及文件
 
-| 文件                                        | 改动                                                                           |
-| ------------------------------------------- | ------------------------------------------------------------------------------ |
-| `packages/shared/src/capabilities.ts`       | 新增 `requestRequiresCapability(ir, capability)` 辅助函数                      |
-| `apps/api/src/modules/router/candidates.ts` | `filterCandidates` 增加 capabilities 检查；新增 `capability_mismatch` 过滤原因 |
-| `apps/api/src/modules/gateway/handler.ts`   | 确保 `ResolvedCandidate` 携带 capabilities 信息                                |
-| `docs/provider-adapters.md`                 | 更新 capabilities 检查说明                                                     |
+| 文件                                        | 改动                                                                 |
+| ------------------------------------------- | -------------------------------------------------------------------- |
+| `packages/shared/src/capabilities.ts`       | `requiredCapabilities` / `requestRequiresCapability`                 |
+| `apps/api/src/modules/router/candidates.ts` | `filterCandidates` capabilities 检查，`capability_mismatch` 过滤原因 |
+| `apps/api/test/router.test.ts`              | 新增 tools / vision / jsonMode / streaming / 纯文本测试              |
+| `docs/provider-adapters.md`                 | capabilities 过滤说明已存在                                          |
 
 ### 验收标准
 
-- 客户端请求包含 `tools` 时，不支持 `supportsTools` 的候选被过滤为 `capability_mismatch`
-- 过滤后的候选列表中不再包含不支持的 upstream
-- 纯文本请求行为不变
-- 现有测试通过
+- ✅ 客户端请求包含 `tools` 时，不支持 `supportsTools` 的候选被过滤为 `capability_mismatch`
+- ✅ 过滤后的候选列表中不再包含不支持的 upstream
+- ✅ 纯文本请求行为不变
+- ✅ 现有测试通过
 
 ---
 
@@ -288,13 +285,13 @@ CREATE INDEX model_consumption_stats_upstream_idx ON model_consumption_stats(ups
 | 阶段三：链路追踪          | 🔴 高  | 无     | 大（新增表 + 埋点 + API + 前端）   | ✅ 已完成 |
 | 阶段四：每日消耗统计      | 🔴 高  | 阶段三 | 中（新增表 + upsert + API + 前端） | ✅ 已完成 |
 | 阶段五：缓存 Token 字段   | 🟡 中  | 无     | 小（表字段 + adapter 提取）        | ✅ 已完成 |
-| 阶段二：Capabilities 过滤 | 🟡 中  | 无     | 中（新增过滤逻辑 + 测试）          | ⏳ 待做   |
+| 阶段二：Capabilities 过滤 | 🟡 中  | 无     | 中（新增过滤逻辑 + 测试）          | ✅ 已完成 |
 | 阶段六：内容日志开关      | 🟢 低  | 无     | 中（开关 + 表 + 脱敏 + 前端）      | ⏳ 待做   |
 
 当前队列中靠前的待做项：
 
 - ✅ `fusion-plan.md` 阶段七 7.4 Group 负载均衡已完成。
-- 本文件阶段二 Capabilities 路由过滤。
+- ✅ 本文件阶段二 Capabilities 路由过滤已完成。
 - 本文件阶段六内容日志开关（低优先级）。
 
 ---
