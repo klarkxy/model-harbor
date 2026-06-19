@@ -4,9 +4,12 @@ import { upstreamKeys, upstreamEndpointHealth } from '../src/modules/db/index.js
 import { makeAdminRig, type AdminTestRig } from './helper.js';
 import {
   listEndpointTargetsForKey,
+  pruneOrphanEndpointHealth,
   runEndpointHealthProbe,
   sortCandidatesByLatency,
 } from '../src/modules/upstream/endpoint-health.js';
+import { updateCircuitBreakerSettings } from '../src/modules/router/circuit-breaker.js';
+import { seedFullRoute } from './helper.js';
 
 const originalFetch = globalThis.fetch;
 
@@ -206,5 +209,216 @@ describe('upstream endpoint health', () => {
     ];
     const sorted = sortCandidatesByLatency(candidates, []);
     expect(sorted.map((c) => c.upstreamKeyId)).toEqual(['b', 'a']);
+  });
+
+  it('cleans up orphan endpoint health rows when the upstream key is deleted', async () => {
+    const id = await createKey({
+      name: 'orphan',
+      providerType: 'anthropic_compatible',
+      baseUrl: 'https://orphan.example.com',
+      apiKey: 'sk-test',
+    });
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 200 } as Response));
+    await runEndpointHealthProbe(rig.db, rig.secretKey);
+    expect(await rig.db.select().from(upstreamEndpointHealth).all()).toHaveLength(1);
+
+    const del = await rig.app.inject({
+      method: 'DELETE',
+      url: `/api/admin/upstream-keys/${id}`,
+      headers: { cookie: rig.cookie },
+    });
+    expect(del.statusCode).toBe(200);
+    expect(await rig.db.select().from(upstreamEndpointHealth).all()).toHaveLength(0);
+  });
+
+  it('prunes orphan rows when the endpoint is no longer configured', async () => {
+    const id = await createKey({
+      name: 'prune',
+      providerType: 'anthropic_compatible',
+      baseUrl: 'https://prune.example.com',
+      apiKey: 'sk-test',
+    });
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 200 } as Response));
+    await runEndpointHealthProbe(rig.db, rig.secretKey);
+    expect(await rig.db.select().from(upstreamEndpointHealth).all()).toHaveLength(1);
+
+    // Change the key's base URL so the existing health row becomes orphaned.
+    await rig.app.inject({
+      method: 'PATCH',
+      url: `/api/admin/upstream-keys/${id}`,
+      headers: { cookie: rig.cookie, 'content-type': 'application/json' },
+      payload: { baseUrl: 'https://prune-new.example.com' },
+    });
+
+    const removed = await pruneOrphanEndpointHealth(rig.db);
+    expect(removed).toBe(1);
+    expect(await rig.db.select().from(upstreamEndpointHealth).all()).toHaveLength(0);
+  });
+
+  it('skips probing when disabled in admin settings', async () => {
+    await createKey({
+      name: 'disabled',
+      providerType: 'anthropic_compatible',
+      baseUrl: 'https://disabled.example.com',
+      apiKey: 'sk-test',
+    });
+
+    const fetchMock = vi.fn().mockResolvedValue({ status: 200 } as Response);
+    vi.stubGlobal('fetch', fetchMock);
+    await updateCircuitBreakerSettings(rig.db, { endpointHealthProbeEnabled: false });
+
+    const summary = await runEndpointHealthProbe(rig.db, rig.secretKey);
+    expect(summary.checked).toBe(0);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('respects configured probe interval from admin settings', async () => {
+    const id = await createKey({
+      name: 'interval',
+      providerType: 'anthropic_compatible',
+      baseUrl: 'https://interval.example.com',
+      apiKey: 'sk-test',
+    });
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 200 } as Response));
+    await updateCircuitBreakerSettings(rig.db, { endpointHealthProbeIntervalMs: 60_000 });
+
+    const first = await runEndpointHealthProbe(rig.db, rig.secretKey);
+    expect(first.checked).toBe(1);
+
+    const second = await runEndpointHealthProbe(rig.db, rig.secretKey, new Date(Date.now() + 1000));
+    expect(second.checked).toBe(0);
+
+    // Simulate the interval elapsing by moving the existing row back in time.
+    await rig.db
+      .update(upstreamEndpointHealth)
+      .set({ lastCheckedAt: new Date(Date.now() - 120_000) })
+      .where(eq(upstreamEndpointHealth.upstreamKeyId, id));
+    const third = await runEndpointHealthProbe(rig.db, rig.secretKey);
+    expect(third.checked).toBe(1);
+  });
+
+  it('exposes and updates endpoint health settings via admin settings API', async () => {
+    const get = await rig.app.inject({
+      method: 'GET',
+      url: '/api/admin/settings',
+      headers: { cookie: rig.cookie },
+    });
+    expect(get.statusCode).toBe(200);
+    const body = get.json() as {
+      endpointHealth: { probeEnabled: boolean; probeIntervalMs: number; probeTimeoutMs: number; degradedLatencyMs: number };
+    };
+    expect(body.endpointHealth.probeEnabled).toBe(true);
+    expect(body.endpointHealth.probeTimeoutMs).toBe(10_000);
+    expect(body.endpointHealth.degradedLatencyMs).toBe(5_000);
+
+    const put = await rig.app.inject({
+      method: 'PUT',
+      url: '/api/admin/settings',
+      headers: { cookie: rig.cookie, 'content-type': 'application/json' },
+      payload: { endpointHealth: { probeIntervalMs: 120_000, probeTimeoutMs: 3_000, degradedLatencyMs: 2_000 } },
+    });
+    expect(put.statusCode).toBe(200);
+    const updated = put.json() as typeof body;
+    expect(updated.endpointHealth.probeIntervalMs).toBe(120_000);
+    expect(updated.endpointHealth.probeTimeoutMs).toBe(3_000);
+    expect(updated.endpointHealth.degradedLatencyMs).toBe(2_000);
+  });
+
+  it('gateway prefers the lower-latency candidate', async () => {
+    const refs = await seedFullRoute(rig);
+
+    const fastRes = await rig.app.inject({
+      method: 'POST',
+      url: '/api/admin/upstream-keys',
+      headers: { cookie: rig.cookie, 'content-type': 'application/json' },
+      payload: {
+        name: 'fast-upstream',
+        providerType: 'anthropic_compatible',
+        baseUrl: 'https://fast.example.com',
+        apiKey: 'sk-test',
+        modelMappings: [{ realName: 'ds-v4-flash', publicName: 'ds-v4-flash', enabled: true }],
+      },
+    });
+    expect(fastRes.statusCode).toBe(200);
+    const fastId = (fastRes.json() as { id: string }).id;
+
+    const candidatesRes = await rig.app.inject({
+      method: 'PUT',
+      url: `/api/admin/public-models/${refs.publicModelId}/candidates`,
+      headers: { cookie: rig.cookie, 'content-type': 'application/json' },
+      payload: {
+        candidates: [
+          { upstreamKeyId: refs.upstreamKeyId, realModelName: 'ds-v4-flash', priority: 100, weight: 1, enabled: true },
+          { upstreamKeyId: fastId, realModelName: 'ds-v4-flash', priority: 100, weight: 1, enabled: true },
+        ],
+      },
+    });
+    expect(candidatesRes.statusCode).toBe(200);
+
+    const now = new Date();
+    await rig.db.insert(upstreamEndpointHealth).values([
+      {
+        id: 'eh_slow',
+        upstreamKeyId: refs.upstreamKeyId,
+        endpointBaseUrl: 'https://api.example.com',
+        delayMs: 500,
+        lastCheckedAt: now,
+        degraded: false,
+        errorCode: null,
+        errorMessage: null,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: 'eh_fast',
+        upstreamKeyId: fastId,
+        endpointBaseUrl: 'https://fast.example.com',
+        delayMs: 20,
+        lastCheckedAt: now,
+        degraded: false,
+        errorCode: null,
+        errorMessage: null,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+
+    let chosenUrl: string | undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        chosenUrl = url;
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              id: 'msg_fast',
+              type: 'message',
+              role: 'assistant',
+              content: [{ type: 'text', text: 'fast' }],
+              model: 'ds-v4-flash',
+              stop_reason: 'end_turn',
+              usage: { input_tokens: 1, output_tokens: 1 },
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+        );
+      }),
+    );
+
+    const res = await rig.app.inject({
+      method: 'POST',
+      url: '/v1/messages',
+      headers: { authorization: `Bearer ${refs.rawConsumerKey}`, 'content-type': 'application/json' },
+      payload: {
+        model: 'ds-v4-flash',
+        messages: [{ role: 'user', content: 'hello' }],
+        max_tokens: 10,
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(chosenUrl).toBe('https://fast.example.com/v1/messages');
   });
 });

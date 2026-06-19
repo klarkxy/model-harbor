@@ -20,7 +20,7 @@ import { pruneExpiredStickyBindings } from '../sticky/index.js';
 
 import { pruneTraceLogs } from '../observability/index.js';
 import { ensureDefaultCircuitBreakerSettings, pruneCircuitBreakers } from '../router/circuit-breaker.js';
-import { runEndpointHealthProbe } from '../upstream/endpoint-health.js';
+import { pruneOrphanEndpointHealth, runEndpointHealthProbe } from '../upstream/endpoint-health.js';
 
 export interface JobResult {
   countersRemoved: number;
@@ -28,6 +28,7 @@ export interface JobResult {
   cooldownsCleared: number;
   tracesRemoved: number;
   circuitBreakersRemoved: number;
+  endpointsPruned: number;
 }
 
 export async function runMaintenancePass(db: Db, now: Date = new Date()): Promise<JobResult> {
@@ -36,6 +37,7 @@ export async function runMaintenancePass(db: Db, now: Date = new Date()): Promis
   const stickyRemoved = await pruneExpiredStickyBindings(db, now);
   const tracesRemoved = await pruneTraceLogs(db, { now });
   const circuitBreakersRemoved = await pruneCircuitBreakers(db, { now });
+  const endpointsPruned = await pruneOrphanEndpointHealth(db);
   // Cooldowns whose `cooldownUntil` is in the past get nulled out so the row
   // is no longer filtered as cooled-down. The candidate filter already
   // checks the timestamp, but keeping the row tidy makes the dashboard
@@ -58,7 +60,7 @@ export async function runMaintenancePass(db: Db, now: Date = new Date()): Promis
       /* ignore */
     }
   }
-  return { countersRemoved, stickyRemoved, cooldownsCleared, tracesRemoved, circuitBreakersRemoved };
+  return { countersRemoved, stickyRemoved, cooldownsCleared, tracesRemoved, circuitBreakersRemoved, endpointsPruned };
 }
 
 export interface BackgroundJobsHandle {

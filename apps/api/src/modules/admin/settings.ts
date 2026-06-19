@@ -28,6 +28,12 @@ export function registerSettingsRoutes(app: FastifyInstance, deps: SettingsRoute
         maxCooldownMs: settings.circuitBreakerMaxCooldownMs,
         halfOpenSuccessCount: settings.circuitBreakerHalfOpenSuccessCount,
       },
+      endpointHealth: {
+        probeEnabled: settings.endpointHealthProbeEnabled,
+        probeIntervalMs: settings.endpointHealthProbeIntervalMs,
+        probeTimeoutMs: settings.endpointHealthProbeTimeoutMs,
+        degradedLatencyMs: settings.endpointHealthProbeDegradedLatencyMs,
+      },
     };
   });
 
@@ -40,14 +46,25 @@ export function registerSettingsRoutes(app: FastifyInstance, deps: SettingsRoute
         maxCooldownMs?: number;
         halfOpenSuccessCount?: number;
       };
+      endpointHealth?: {
+        probeEnabled?: boolean;
+        probeIntervalMs?: number;
+        probeTimeoutMs?: number;
+        degradedLatencyMs?: number;
+      };
     };
-    const input = body.circuitBreaker ?? {};
+    const cbInput = body.circuitBreaker ?? {};
+    const ehInput = body.endpointHealth ?? {};
     const updated = await updateCircuitBreakerSettings(db, {
-      circuitBreakerEnabled: input.enabled,
-      circuitBreakerFailureThreshold: input.failureThreshold,
-      circuitBreakerBaseCooldownMs: input.baseCooldownMs,
-      circuitBreakerMaxCooldownMs: input.maxCooldownMs,
-      circuitBreakerHalfOpenSuccessCount: input.halfOpenSuccessCount,
+      circuitBreakerEnabled: cbInput.enabled,
+      circuitBreakerFailureThreshold: cbInput.failureThreshold,
+      circuitBreakerBaseCooldownMs: cbInput.baseCooldownMs,
+      circuitBreakerMaxCooldownMs: cbInput.maxCooldownMs,
+      circuitBreakerHalfOpenSuccessCount: cbInput.halfOpenSuccessCount,
+      endpointHealthProbeEnabled: ehInput.probeEnabled,
+      endpointHealthProbeIntervalMs: ehInput.probeIntervalMs,
+      endpointHealthProbeTimeoutMs: ehInput.probeTimeoutMs,
+      endpointHealthProbeDegradedLatencyMs: ehInput.degradedLatencyMs,
     });
     return {
       circuitBreaker: {
@@ -56,6 +73,12 @@ export function registerSettingsRoutes(app: FastifyInstance, deps: SettingsRoute
         baseCooldownMs: updated.circuitBreakerBaseCooldownMs,
         maxCooldownMs: updated.circuitBreakerMaxCooldownMs,
         halfOpenSuccessCount: updated.circuitBreakerHalfOpenSuccessCount,
+      },
+      endpointHealth: {
+        probeEnabled: updated.endpointHealthProbeEnabled,
+        probeIntervalMs: updated.endpointHealthProbeIntervalMs,
+        probeTimeoutMs: updated.endpointHealthProbeTimeoutMs,
+        degradedLatencyMs: updated.endpointHealthProbeDegradedLatencyMs,
       },
     };
   });

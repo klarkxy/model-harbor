@@ -573,8 +573,16 @@ export interface CircuitBreakerSettings {
   halfOpenSuccessCount: number;
 }
 
+export interface EndpointHealthSettings {
+  probeEnabled: boolean;
+  probeIntervalMs: number;
+  probeTimeoutMs: number;
+  degradedLatencyMs: number;
+}
+
 export interface SettingsResponse {
   circuitBreaker: CircuitBreakerSettings;
+  endpointHealth: EndpointHealthSettings;
 }
 
 export interface CircuitBreakerItem {
@@ -595,7 +603,7 @@ export interface CircuitBreakerItem {
 
 export const settingsApi = {
   get: () => api.get<SettingsResponse>('/api/admin/settings'),
-  update: (payload: { circuitBreaker?: Partial<CircuitBreakerSettings> }) =>
+  update: (payload: { circuitBreaker?: Partial<CircuitBreakerSettings>; endpointHealth?: Partial<EndpointHealthSettings> }) =>
     api.put<SettingsResponse>('/api/admin/settings', payload),
 };
 

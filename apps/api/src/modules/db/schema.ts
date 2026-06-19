@@ -43,6 +43,10 @@ export const adminSettings = sqliteTable('admin_settings', {
   circuitBreakerBaseCooldownMs: integer('circuit_breaker_base_cooldown_ms').notNull().default(60_000),
   circuitBreakerMaxCooldownMs: integer('circuit_breaker_max_cooldown_ms').notNull().default(600_000),
   circuitBreakerHalfOpenSuccessCount: integer('circuit_breaker_half_open_success_count').notNull().default(2),
+  endpointHealthProbeEnabled: integer('endpoint_health_probe_enabled', { mode: 'boolean' }).notNull().default(true),
+  endpointHealthProbeIntervalMs: integer('endpoint_health_probe_interval_ms').notNull().default(3_600_000),
+  endpointHealthProbeTimeoutMs: integer('endpoint_health_probe_timeout_ms').notNull().default(10_000),
+  endpointHealthProbeDegradedLatencyMs: integer('endpoint_health_probe_degraded_latency_ms').notNull().default(5_000),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });

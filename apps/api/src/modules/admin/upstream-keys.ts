@@ -18,7 +18,7 @@ import {
   upstreamKeyQuotas,
   upstreamKeys,
 } from '../db/index.js';
-import { listUpstreamEndpointHealth } from '../upstream/endpoint-health.js';
+import { listUpstreamEndpointHealth, pruneOrphanEndpointHealth } from '../upstream/endpoint-health.js';
 import { listStickyBindingsForConsumer } from '../sticky/index.js';
 import { runMaintenancePass } from '../jobs/index.js';
 import { recordAuditEvent, type AuditAction } from '../observability/index.js';
@@ -1293,6 +1293,11 @@ export function registerUpstreamKeyRoutes(app: FastifyInstance, deps: UpstreamKe
   app.delete('/api/admin/upstream-keys/:id', async (req) => {
     const { id } = req.params as { id: string };
     await db.delete(upstreamKeys).where(eq(upstreamKeys.id, id));
+    try {
+      await pruneOrphanEndpointHealth(db);
+    } catch {
+      // Best-effort cleanup; deleting the key already satisfies the request.
+    }
     await audit(db, auditMetaFromRequest(req), 'upstream_key.delete', id);
     return { id, deleted: true };
   });

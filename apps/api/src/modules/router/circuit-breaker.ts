@@ -11,6 +11,10 @@ export interface CircuitBreakerSettings {
   circuitBreakerBaseCooldownMs: number;
   circuitBreakerMaxCooldownMs: number;
   circuitBreakerHalfOpenSuccessCount: number;
+  endpointHealthProbeEnabled: boolean;
+  endpointHealthProbeIntervalMs: number;
+  endpointHealthProbeTimeoutMs: number;
+  endpointHealthProbeDegradedLatencyMs: number;
 }
 
 const DEFAULT_SETTINGS: CircuitBreakerSettings = {
@@ -19,6 +23,10 @@ const DEFAULT_SETTINGS: CircuitBreakerSettings = {
   circuitBreakerBaseCooldownMs: 60_000,
   circuitBreakerMaxCooldownMs: 600_000,
   circuitBreakerHalfOpenSuccessCount: 2,
+  endpointHealthProbeEnabled: true,
+  endpointHealthProbeIntervalMs: 3_600_000,
+  endpointHealthProbeTimeoutMs: 10_000,
+  endpointHealthProbeDegradedLatencyMs: 5_000,
 };
 
 const SETTINGS_ID = 'default';
@@ -62,6 +70,10 @@ export async function getCircuitBreakerSettings(db: Db): Promise<CircuitBreakerS
         circuitBreakerBaseCooldownMs: row.circuitBreakerBaseCooldownMs,
         circuitBreakerMaxCooldownMs: row.circuitBreakerMaxCooldownMs,
         circuitBreakerHalfOpenSuccessCount: row.circuitBreakerHalfOpenSuccessCount,
+        endpointHealthProbeEnabled: row.endpointHealthProbeEnabled,
+        endpointHealthProbeIntervalMs: row.endpointHealthProbeIntervalMs,
+        endpointHealthProbeTimeoutMs: row.endpointHealthProbeTimeoutMs,
+        endpointHealthProbeDegradedLatencyMs: row.endpointHealthProbeDegradedLatencyMs,
       };
     }
   } catch {
@@ -105,6 +117,18 @@ export async function updateCircuitBreakerSettings(
   }
   if (typeof input.circuitBreakerHalfOpenSuccessCount === 'number') {
     values.circuitBreakerHalfOpenSuccessCount = Math.max(1, Math.round(input.circuitBreakerHalfOpenSuccessCount));
+  }
+  if (typeof input.endpointHealthProbeEnabled === 'boolean') {
+    values.endpointHealthProbeEnabled = input.endpointHealthProbeEnabled;
+  }
+  if (typeof input.endpointHealthProbeIntervalMs === 'number') {
+    values.endpointHealthProbeIntervalMs = Math.max(60_000, Math.round(input.endpointHealthProbeIntervalMs));
+  }
+  if (typeof input.endpointHealthProbeTimeoutMs === 'number') {
+    values.endpointHealthProbeTimeoutMs = Math.max(1_000, Math.round(input.endpointHealthProbeTimeoutMs));
+  }
+  if (typeof input.endpointHealthProbeDegradedLatencyMs === 'number') {
+    values.endpointHealthProbeDegradedLatencyMs = Math.max(1_000, Math.round(input.endpointHealthProbeDegradedLatencyMs));
   }
 
   await db

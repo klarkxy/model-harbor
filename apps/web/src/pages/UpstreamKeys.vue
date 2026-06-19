@@ -88,13 +88,18 @@ const extraHeaders = ref<KeyValueItem[]>([]);
 const extraParams = ref<KeyValueItem[]>([]);
 const fetchingModels = ref(false);
 const togglingIds = ref<Set<string>>(new Set());
-const endpointHealthByKey = ref<Map<string, UpstreamEndpointHealth>>(new Map());
+const endpointHealthRows = ref<UpstreamEndpointHealth[]>([]);
 
 const pingOpen = ref(false);
 const pingKey = ref<UpstreamKey | null>(null);
 const pingCandidates = ref<UpstreamKeyCandidate[]>([]);
 const pingLoading = ref<Set<string>>(new Set());
 const pingResults = ref<Record<string, UpstreamKeyPingResult>>({});
+
+const healthOpen = ref(false);
+const healthKey = ref<UpstreamKey | null>(null);
+const healthRows = ref<UpstreamEndpointHealth[]>([]);
+const healthLoading = ref(false);
 
 function resetForm() {
   form.value = {
@@ -139,14 +144,7 @@ async function refresh() {
     ]);
     items.value = keysRes.items;
     presets.value = presetsRes.items;
-    const map = new Map<string, UpstreamEndpointHealth>();
-    for (const h of healthRes.items) {
-      const existing = map.get(h.upstreamKeyId);
-      if (!existing || (h.lastCheckedAt ?? 0) > (existing.lastCheckedAt ?? 0)) {
-        map.set(h.upstreamKeyId, h);
-      }
-    }
-    endpointHealthByKey.value = map;
+    endpointHealthRows.value = healthRes.items;
   } catch (err) {
     message.error((err as Error).message);
   } finally {
@@ -535,6 +533,85 @@ function latencyTagType(latencyMs: number): 'success' | 'warning' | 'error' {
   return 'error';
 }
 
+function healthRowsForKey(keyId: string): UpstreamEndpointHealth[] {
+  return endpointHealthRows.value.filter((h) => h.upstreamKeyId === keyId);
+}
+
+interface KeyHealthSummary {
+  total: number;
+  checked: number;
+  degraded: number;
+  bestDelayMs: number | null;
+}
+
+function summarizeKeyHealth(keyId: string): KeyHealthSummary {
+  const rows = healthRowsForKey(keyId);
+  let checked = 0;
+  let degraded = 0;
+  let bestDelayMs: number | null = null;
+  for (const r of rows) {
+    if (r.lastCheckedAt !== null) {
+      checked += 1;
+      if (r.degraded) {
+        degraded += 1;
+      } else if (r.delayMs !== null) {
+        bestDelayMs = bestDelayMs === null ? r.delayMs : Math.min(bestDelayMs, r.delayMs);
+      }
+    }
+  }
+  return { total: rows.length, checked, degraded, bestDelayMs };
+}
+
+async function openHealth(row: UpstreamKey) {
+  healthKey.value = row;
+  healthOpen.value = true;
+  healthLoading.value = true;
+  try {
+    const res = await upstreamEndpointHealthApi.list(row.id);
+    healthRows.value = res.items;
+  } catch (err) {
+    message.error((err as Error).message);
+    healthRows.value = [];
+  } finally {
+    healthLoading.value = false;
+  }
+}
+
+const pingHealthRows = computed(() => (pingKey.value ? healthRowsForKey(pingKey.value.id) : []));
+
+const healthColumns = computed<DataTableColumns<UpstreamEndpointHealth>>(() => [
+  { title: t('upstreamKeys.health.endpoint'), key: 'endpointBaseUrl', ellipsis: { tooltip: true } },
+  {
+    title: t('upstreamKeys.health.latency'),
+    key: 'delayMs',
+    width: 110,
+    render: (row) => {
+      if (row.delayMs === null) return h(NText, { depth: 3, size: 'small' }, () => '—');
+      return h(NTag, { type: latencyTagType(row.delayMs), size: 'small' }, () => `${row.delayMs} ms`);
+    },
+  },
+  {
+    title: t('upstreamKeys.health.status'),
+    key: 'degraded',
+    width: 110,
+    render: (row) =>
+      h(
+        NTag,
+        { type: row.degraded ? 'error' : 'success', size: 'small' },
+        () => (row.degraded ? row.errorCode ?? t('upstreamKeys.health.degraded') : t('upstreamKeys.health.healthy')),
+      ),
+  },
+  {
+    title: t('upstreamKeys.health.lastChecked'),
+    key: 'lastCheckedAt',
+    width: 160,
+    render: (row) =>
+      h(NText, { depth: 3, size: 'small' }, () =>
+        row.lastCheckedAt ? new Date(row.lastCheckedAt).toLocaleString() : '—',
+      ),
+  },
+]);
+
 const providerOptions = computed(() => [
   { label: t('upstreamKeys.drawer.providers.anthropic'), value: 'anthropic_compatible' },
   { label: t('upstreamKeys.drawer.providers.openai'), value: 'openai_compatible' },
@@ -762,31 +839,38 @@ const columns = computed<DataTableColumns<UpstreamKey>>(() => [
   {
     title: t('upstreamKeys.columns.health'),
     key: 'health',
-    width: 130,
+    width: 150,
     render: (row) => {
-      const health = endpointHealthByKey.value.get(row.id);
-      if (!health || health.lastCheckedAt === null) {
+      const summary = summarizeKeyHealth(row.id);
+      if (summary.checked === 0) {
         return h(NText, { depth: 3, size: 'small' }, () => '—');
       }
-      if (health.degraded) {
+      if (summary.degraded > 0) {
         return h(
           NTag,
           { type: 'error', size: 'small' },
-          () => health.errorCode ?? 'degraded',
+          () => t('upstreamKeys.health.degradedCount', { count: summary.degraded, total: summary.total }),
         );
       }
-      const ms = health.delayMs ?? 0;
-      return h(NTag, { type: 'success', size: 'small' }, () => `${ms} ms`);
+      const ms = summary.bestDelayMs ?? 0;
+      const label =
+        summary.total > 1
+          ? t('upstreamKeys.health.bestLatency', { ms, total: summary.total })
+          : t('upstreamKeys.health.latencyMs', { ms });
+      return h(NTag, { type: latencyTagType(ms), size: 'small' }, () => label);
     },
   },
   {
     title: t('upstreamKeys.columns.actions'),
     key: 'actions',
-    width: 210,
+    width: 280,
     render: (row) =>
       h(NSpace, { size: 'small', align: 'center' }, () => [
         h(NButton, { size: 'small', onClick: () => openPing(row) }, () =>
           t('upstreamKeys.actions.test'),
+        ),
+        h(NButton, { size: 'small', onClick: () => openHealth(row) }, () =>
+          t('upstreamKeys.actions.health'),
         ),
         h(NButton, { size: 'small', onClick: () => openEdit(row) }, () =>
           t('upstreamKeys.actions.edit'),
@@ -1054,6 +1138,30 @@ const columns = computed<DataTableColumns<UpstreamKey>>(() => [
     >
       <NSpace vertical>
         <NText depth="3">{{ pingKey?.baseUrl }}</NText>
+        <NSpace v-if="pingHealthRows.length > 0" vertical size="small" style="width: 100%">
+          <NText depth="3" style="font-size: 12px">{{ t('upstreamKeys.ping.endpointHealthTitle') }}</NText>
+          <NList bordered size="small">
+            <NListItem v-for="h in pingHealthRows" :key="h.id">
+              <NSpace align="center" justify="space-between" style="width: 100%">
+                <NText style="font-size: 12px">{{ h.endpointBaseUrl }}</NText>
+                <NSpace align="center" :size="4">
+                  <NTag
+                    v-if="h.delayMs !== null"
+                    :type="latencyTagType(h.delayMs)"
+                    size="small"
+                  >{{ h.delayMs }} ms</NTag>
+                  <NTag v-else type="warning" size="small">—</NTag>
+                  <NTag :type="h.degraded ? 'error' : 'success'" size="small">
+                    {{ h.degraded ? t('upstreamKeys.health.degraded') : t('upstreamKeys.health.healthy') }}
+                  </NTag>
+                  <NText depth="3" style="font-size: 11px">
+                    {{ h.lastCheckedAt ? new Date(h.lastCheckedAt).toLocaleString() : '' }}
+                  </NText>
+                </NSpace>
+              </NSpace>
+            </NListItem>
+          </NList>
+        </NSpace>
         <NSpace>
           <NButton size="small" :loading="pingLoading.size > 0" @click="handlePingAll">
             {{ t('upstreamKeys.ping.pingAll') }}
@@ -1106,6 +1214,24 @@ const columns = computed<DataTableColumns<UpstreamKey>>(() => [
           </NListItem>
         </NList>
       </NSpace>
+    </NModal>
+
+    <NModal
+      v-model:show="healthOpen"
+      preset="card"
+      style="max-width: 720px"
+      :title="t('upstreamKeys.health.title', { name: healthKey?.name ?? '' })"
+      @update:show="(v: boolean) => (healthOpen = v)"
+    >
+      <NDataTable
+        :columns="healthColumns"
+        :data="healthRows"
+        :loading="healthLoading"
+        :bordered="false"
+        :single-line="false"
+        :row-key="(row) => row.id"
+        :empty="h(NEmpty, { description: t('upstreamKeys.health.empty') })"
+      />
     </NModal>
   </div>
 </template>

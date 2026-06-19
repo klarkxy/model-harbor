@@ -20,6 +20,7 @@ interface ProbeResponse {
   ttfbMs: number;
 }
 import { resolveAuthorizationHeader } from '../providers/auth/index.js';
+import { getCircuitBreakerSettings } from '../router/circuit-breaker.js';
 
 export interface EndpointHealthProbeOptions {
   timeoutMs?: number;
@@ -200,7 +201,7 @@ export async function upsertEndpointHealth(
   }
 }
 
-const PROBE_INTERVAL_MS = 60 * 60 * 1000;
+const DEFAULT_PROBE_INTERVAL_MS = 60 * 60 * 1000;
 
 export async function runEndpointHealthProbe(
   db: Db,
@@ -208,6 +209,16 @@ export async function runEndpointHealthProbe(
   now: Date = new Date(),
   options: EndpointHealthProbeOptions = {},
 ): Promise<UpstreamEndpointHealthProbeSummary> {
+  const settings = await getCircuitBreakerSettings(db);
+  if (!settings.endpointHealthProbeEnabled) {
+    return { checked: 0, degraded: 0 };
+  }
+  const probeIntervalMs = Math.max(60_000, settings.endpointHealthProbeIntervalMs ?? DEFAULT_PROBE_INTERVAL_MS);
+  const probeOptions: EndpointHealthProbeOptions = {
+    timeoutMs: options.timeoutMs ?? settings.endpointHealthProbeTimeoutMs,
+    degradedLatencyMs: options.degradedLatencyMs ?? settings.endpointHealthProbeDegradedLatencyMs,
+  };
+
   const keys = await db.select().from(upstreamKeys).where(eq(upstreamKeys.enabled, true)).all();
   const targets = keys.flatMap(listEndpointTargetsForKey);
 
@@ -222,17 +233,22 @@ export async function runEndpointHealthProbe(
   for (const target of targets) {
     const existing = existingByEndpoint.get(`${target.upstreamKeyId}|${target.baseUrl}`);
     const lastChecked = existing?.lastCheckedAt?.getTime() ?? 0;
-    if (now.getTime() - lastChecked < PROBE_INTERVAL_MS) {
+    if (now.getTime() - lastChecked < probeIntervalMs) {
       continue;
     }
     try {
-      const result = await sendProbe(db, secretKey, target, options);
+      const result = await sendProbe(db, secretKey, target, probeOptions);
       await upsertEndpointHealth(db, target, result, now);
       checked += 1;
       if (result.degraded) degraded += 1;
     } catch {
       // Best-effort: a single failed probe must not stop the sweep.
     }
+  }
+  try {
+    await pruneOrphanEndpointHealth(db);
+  } catch {
+    // Best-effort cleanup; next run will retry.
   }
   return { checked, degraded };
 }
@@ -261,6 +277,23 @@ export async function getEndpointHealthForUpstreamKeyIds(
     .from(upstreamEndpointHealth)
     .where(inArray(upstreamEndpointHealth.upstreamKeyId, upstreamKeyIds))
     .all();
+}
+
+export async function pruneOrphanEndpointHealth(db: Db): Promise<number> {
+  const healthRows = await db.select().from(upstreamEndpointHealth).all();
+  const keys = await db.select().from(upstreamKeys).all();
+  const validEndpoints = new Set<string>();
+  for (const key of keys) {
+    for (const target of listEndpointTargetsForKey(key)) {
+      validEndpoints.add(`${target.upstreamKeyId}|${target.baseUrl}`);
+    }
+  }
+  const orphanIds = healthRows
+    .filter((h) => !validEndpoints.has(`${h.upstreamKeyId}|${h.endpointBaseUrl}`))
+    .map((h) => h.id);
+  if (orphanIds.length === 0) return 0;
+  await db.delete(upstreamEndpointHealth).where(inArray(upstreamEndpointHealth.id, orphanIds));
+  return orphanIds.length;
 }
 
 export function sortCandidatesByLatency<

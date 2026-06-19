@@ -27,6 +27,7 @@ import {
   type AuditEvent,
   type CircuitBreakerItem,
   type CircuitBreakerSettings,
+  type EndpointHealthSettings,
 } from '../api/admin.js';
 
 const { t } = useI18n();
@@ -36,6 +37,7 @@ const error = ref<string | null>(null);
 const savingProfile = ref(false);
 const savingPassword = ref(false);
 const savingCircuitBreaker = ref(false);
+const savingEndpointHealth = ref(false);
 
 const profile = ref<AdminSummary | null>(null);
 const displayName = ref<string>('');
@@ -48,6 +50,7 @@ const auditEvents = ref<AuditEvent[]>([]);
 const auditLoading = ref(false);
 
 const circuitBreakerSettings = ref<CircuitBreakerSettings | null>(null);
+const endpointHealthSettings = ref<EndpointHealthSettings | null>(null);
 const circuitBreakers = ref<CircuitBreakerItem[]>([]);
 const circuitBreakersLoading = ref(false);
 
@@ -77,6 +80,7 @@ async function refreshCircuitBreakerSettings(): Promise<void> {
   try {
     const res = await settingsApi.get();
     circuitBreakerSettings.value = res.circuitBreaker;
+    endpointHealthSettings.value = res.endpointHealth;
   } catch (err) {
     error.value = (err as Error).message;
   }
@@ -101,6 +105,22 @@ onMounted(async () => {
     error.value = (err as Error).message;
   }
 });
+
+async function saveEndpointHealthSettings(): Promise<void> {
+  if (!endpointHealthSettings.value) return;
+  savingEndpointHealth.value = true;
+  error.value = null;
+  message.value = null;
+  try {
+    const res = await settingsApi.update({ endpointHealth: endpointHealthSettings.value });
+    endpointHealthSettings.value = res.endpointHealth;
+    message.value = t('settings.endpointHealth.saved');
+  } catch (err) {
+    error.value = err instanceof ApiClientError ? err.message : (err as Error).message;
+  } finally {
+    savingEndpointHealth.value = false;
+  }
+}
 
 async function saveProfile(): Promise<void> {
   savingProfile.value = true;
@@ -301,6 +321,44 @@ const username = computed(() => profile.value?.username ?? '');
           <NSpace>
             <NButton type="primary" :loading="savingCircuitBreaker" @click="saveCircuitBreakerSettings">
               {{ t('settings.circuitBreaker.save') }}
+            </NButton>
+          </NSpace>
+        </NForm>
+      </NCard>
+
+      <NCard :title="t('settings.endpointHealth.title')">
+        <NSpin v-if="!endpointHealthSettings" />
+        <NForm v-else label-placement="top" style="max-width: 640px">
+          <NFormItem :label="t('settings.endpointHealth.enabled')">
+            <NSwitch v-model:value="endpointHealthSettings.probeEnabled" />
+          </NFormItem>
+          <NFormItem :label="t('settings.endpointHealth.intervalMs')">
+            <NInputNumber
+              v-model:value="endpointHealthSettings.probeIntervalMs"
+              :min="60000"
+              :step="60000"
+              style="width: 200px"
+            />
+          </NFormItem>
+          <NFormItem :label="t('settings.endpointHealth.timeoutMs')">
+            <NInputNumber
+              v-model:value="endpointHealthSettings.probeTimeoutMs"
+              :min="1000"
+              :step="1000"
+              style="width: 200px"
+            />
+          </NFormItem>
+          <NFormItem :label="t('settings.endpointHealth.degradedLatencyMs')">
+            <NInputNumber
+              v-model:value="endpointHealthSettings.degradedLatencyMs"
+              :min="1000"
+              :step="1000"
+              style="width: 200px"
+            />
+          </NFormItem>
+          <NSpace>
+            <NButton type="primary" :loading="savingEndpointHealth" @click="saveEndpointHealthSettings">
+              {{ t('settings.endpointHealth.save') }}
             </NButton>
           </NSpace>
         </NForm>

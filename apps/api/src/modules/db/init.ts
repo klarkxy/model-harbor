@@ -32,9 +32,17 @@ const STATEMENTS: readonly string[] = [
      circuit_breaker_base_cooldown_ms INTEGER NOT NULL DEFAULT 60000,
      circuit_breaker_max_cooldown_ms INTEGER NOT NULL DEFAULT 600000,
      circuit_breaker_half_open_success_count INTEGER NOT NULL DEFAULT 2,
+     endpoint_health_probe_enabled INTEGER NOT NULL DEFAULT 1,
+     endpoint_health_probe_interval_ms INTEGER NOT NULL DEFAULT 3600000,
+     endpoint_health_probe_timeout_ms INTEGER NOT NULL DEFAULT 10000,
+     endpoint_health_probe_degraded_latency_ms INTEGER NOT NULL DEFAULT 5000,
      created_at INTEGER NOT NULL,
      updated_at INTEGER NOT NULL
    )`,
+  `ALTER TABLE admin_settings ADD COLUMN endpoint_health_probe_enabled INTEGER NOT NULL DEFAULT 1`,
+  `ALTER TABLE admin_settings ADD COLUMN endpoint_health_probe_interval_ms INTEGER NOT NULL DEFAULT 3600000`,
+  `ALTER TABLE admin_settings ADD COLUMN endpoint_health_probe_timeout_ms INTEGER NOT NULL DEFAULT 10000`,
+  `ALTER TABLE admin_settings ADD COLUMN endpoint_health_probe_degraded_latency_ms INTEGER NOT NULL DEFAULT 5000`,
 
   // Apps
   `CREATE TABLE IF NOT EXISTS apps (
