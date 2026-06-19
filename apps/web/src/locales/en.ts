@@ -472,6 +472,7 @@ const messages = {
     byTarget: 'By target',
     recentRequests: 'Recent requests',
     traces: 'Trace logs',
+    traceDetail: 'Trace detail',
     consumption: 'Daily consumption',
     empty: {
       app: 'No app traffic in this window',
@@ -502,6 +503,14 @@ const messages = {
       sourceProtocol: 'Source protocol',
       outcome: 'Outcome',
       dayDate: 'Date',
+      step: 'Step',
+      stepIndex: '#',
+      model: 'Model',
+      filterReason: 'Filter reason',
+    },
+    traceSteps: {
+      title: 'Steps',
+      loadError: 'Failed to load trace: {message}',
     },
     loadError: 'Failed to load: {message}',
   },

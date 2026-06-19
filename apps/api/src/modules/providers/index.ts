@@ -46,8 +46,7 @@ import hunyuan from './hunyuan.js';
 import qianfan from './qianfan.js';
 import stepfun from './stepfun.js';
 import kimiCode from './kimi-code.js';
-// Coze preset is hidden until the provider offers a reliable public model
-// catalog and larger models through its API.
+import coze from './coze-preset.js';
 import codex from './codex.js';
 
 const MODULES: readonly ProviderModule[] = [
@@ -78,6 +77,7 @@ const MODULES: readonly ProviderModule[] = [
   qianfan,
   stepfun,
   kimiCode,
+  coze,
   codex,
 ].sort((a, b) => a.preset.name.localeCompare(b.preset.name));
 

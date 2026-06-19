@@ -10,10 +10,16 @@ import {
   publicModels,
   upstreamKeys,
 } from '../db/index.js';
-import { protocolFor, type ProviderType, type SourceProtocol } from '@modelharbor/shared';
+import {
+  protocolFor,
+  type ProviderType,
+  type SourceProtocol,
+  type ProviderCapabilities,
+  requiredCapabilities,
+  type RequiredCapabilities,
+} from '@modelharbor/shared';
 import { NoRouteAvailableError, ValidationError } from '@modelharbor/shared';
 import { getProviderAdapter } from '../providers/index.js';
-import type { ProviderCapabilities } from '@modelharbor/shared';
 
 // One concrete upstream route the gateway can take: a (upstream key, real
 // model) pair. Carries everything the sender needs plus the upstream key's
@@ -284,64 +290,28 @@ export interface FilterResult {
   fallback: ResolvedCandidate[];
 }
 
-// Inspect the raw request and determine which adapter capabilities are required.
-// This is a lightweight check that looks at the wire-format request, not the IR.
-// It can be expanded as new features (vision, json mode, reasoning) are added.
-function requiredCapabilities(rawRequest: unknown): {
-  streaming?: boolean;
-  tools?: boolean;
-  vision?: boolean;
-  jsonMode?: boolean;
-} {
-  const required: ReturnType<typeof requiredCapabilities> = {};
-  if (!rawRequest || typeof rawRequest !== 'object') return required;
-  const req = rawRequest as Record<string, unknown>;
-
-  // Tools check: Anthropic `tools` / OpenAI `tools` or `tool_choice`.
-  if (Array.isArray(req['tools']) && req['tools'].length > 0) {
-    required.tools = true;
-  }
-  if (req['tool_choice'] !== undefined && req['tool_choice'] !== 'none') {
-    required.tools = true;
-  }
-
-  // JSON mode check: OpenAI `response_format` or `json_mode`.
-  if (req['response_format'] !== undefined || req['json_mode'] === true) {
-    required.jsonMode = true;
-  }
-
-  // Vision check: look for image content in messages.
-  const messages = req['messages'];
-  if (Array.isArray(messages)) {
-    for (const msg of messages) {
-      if (!msg || typeof msg !== 'object') continue;
-      const content = (msg as Record<string, unknown>)['content'];
-      if (Array.isArray(content)) {
-        for (const part of content) {
-          if (part && typeof part === 'object' && (part as Record<string, unknown>)['type'] === 'image') {
-            required.vision = true;
-          }
-        }
-      }
-    }
-  }
-
-  return required;
-}
-
 // Check whether a candidate's adapter supports the features required by the
 // request. Returns the first mismatched capability, or null if all are fine.
 function checkCapabilityMismatch(
   candidate: ResolvedCandidate,
-  required: ReturnType<typeof requiredCapabilities>,
+  required: RequiredCapabilities,
 ): FilterReason | null {
+  if (required.streaming && !candidate.capabilities.supportsStreaming) {
+    return 'capability_mismatch';
+  }
   if (required.tools && !candidate.capabilities.supportsTools) {
+    return 'capability_mismatch';
+  }
+  if (required.toolChoice && !candidate.capabilities.supportsToolChoice) {
     return 'capability_mismatch';
   }
   if (required.vision && !candidate.capabilities.supportsVision) {
     return 'capability_mismatch';
   }
   if (required.jsonMode && !candidate.capabilities.supportsJsonMode) {
+    return 'capability_mismatch';
+  }
+  if (required.thinking && !candidate.capabilities.supportsThinking) {
     return 'capability_mismatch';
   }
   return null;

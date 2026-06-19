@@ -398,6 +398,8 @@ export interface UsageRecentRow {
   inputTokens: number | null;
   outputTokens: number | null;
   totalTokens: number | null;
+  cacheReadTokens: number | null;
+  cacheWriteTokens: number | null;
   status: 'success' | 'error';
   errorCode: string | null;
   latencyMs: number;

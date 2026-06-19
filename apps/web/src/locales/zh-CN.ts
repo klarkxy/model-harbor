@@ -470,6 +470,7 @@ const messages: Messages = {
     byTarget: '按目标',
     recentRequests: '最近请求',
     traces: '链路追踪',
+    traceDetail: '追踪详情',
     consumption: '每日消耗',
     empty: {
       app: '该时间窗口内没有应用流量',
@@ -500,6 +501,14 @@ const messages: Messages = {
       sourceProtocol: '来源协议',
       outcome: '结果',
       dayDate: '日期',
+      step: '步骤',
+      stepIndex: '序号',
+      model: '模型',
+      filterReason: '过滤原因',
+    },
+    traceSteps: {
+      title: '步骤',
+      loadError: '加载追踪失败：{message}',
     },
     loadError: '加载失败：{message}',
   },

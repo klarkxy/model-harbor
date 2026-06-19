@@ -95,10 +95,6 @@ const STATEMENTS: readonly string[] = [
   `ALTER TABLE upstream_keys ADD COLUMN auth_type TEXT NOT NULL DEFAULT 'pat'`,
   `ALTER TABLE upstream_keys ADD COLUMN auth_config_ciphertext TEXT`,
 
-  // M8: usage record cache token columns
-  `ALTER TABLE usage_records ADD COLUMN cache_read_tokens INTEGER`,
-  `ALTER TABLE usage_records ADD COLUMN cache_write_tokens INTEGER`,
-
   // OAuth PKCE authorization sessions (short-lived, one-time use).
   `CREATE TABLE IF NOT EXISTS oauth_sessions (
      id TEXT PRIMARY KEY,
@@ -226,6 +222,9 @@ const STATEMENTS: readonly string[] = [
   `CREATE INDEX IF NOT EXISTS usage_records_app_idx ON usage_records(app_id, created_at)`,
   `CREATE INDEX IF NOT EXISTS usage_records_consumer_idx ON usage_records(consumer_key_id, created_at)`,
   `CREATE INDEX IF NOT EXISTS usage_records_upstream_idx ON usage_records(upstream_key_id, created_at)`,
+  // M8: usage record cache token columns (must run after the table exists)
+  `ALTER TABLE usage_records ADD COLUMN cache_read_tokens INTEGER`,
+  `ALTER TABLE usage_records ADD COLUMN cache_write_tokens INTEGER`,
   // M6: quota counters
   `CREATE TABLE IF NOT EXISTS upstream_key_counters (
      id TEXT PRIMARY KEY,

@@ -28,7 +28,7 @@ export async function onboardUpstreamKey(
   preset: ProviderPreset,
 ): Promise<OnboardingResult> {
   const mappings = getModelMappings(preset).map((m) => ({ ...m, enabled: true }));
-  return onboardUpstreamKeyWithMappings(db, upstreamKeyId, preset.name, mappings);
+  return onboardUpstreamKeyWithMappings(db, upstreamKeyId, mappings);
 }
 
 // Same as onboardUpstreamKey but with caller-supplied mappings. Used when the
@@ -36,7 +36,6 @@ export async function onboardUpstreamKey(
 export async function onboardUpstreamKeyWithMappings(
   db: Db,
   upstreamKeyId: string,
-  _groupName: string, // kept for API compatibility but no longer used
   mappings: OnboardingMapping[],
 ): Promise<OnboardingResult> {
   const now = new Date();

@@ -5,6 +5,8 @@ import {
   NButton,
   NCard,
   NDataTable,
+  NDrawer,
+  NDrawerContent,
   NEmpty,
   NGi,
   NGrid,
@@ -24,6 +26,7 @@ import {
   type UsageTotals,
   type UsageWindow,
   type TraceSummary,
+  type TraceTimeline,
   type DailyConsumptionSummary,
 } from '../api/admin.js';
 
@@ -46,6 +49,10 @@ const traces = ref<TraceSummary[]>([]);
 const consumption = ref<DailyConsumptionSummary[]>([]);
 const loading = ref(false);
 const lastError = ref<string | null>(null);
+const traceDrawerOpen = ref(false);
+const selectedTrace = ref<TraceTimeline | null>(null);
+const traceDetailLoading = ref(false);
+const traceDetailError = ref<string | null>(null);
 
 async function refresh(): Promise<void> {
   loading.value = true;
@@ -213,6 +220,24 @@ const recentColumns = computed<DataTableColumns<UsageRecentRow>>(() => [
   },
 ]);
 
+function openTraceDetail(traceId: string) {
+  traceDrawerOpen.value = true;
+  traceDetailLoading.value = true;
+  traceDetailError.value = null;
+  selectedTrace.value = null;
+  traceApi
+    .get(traceId)
+    .then((timeline) => {
+      selectedTrace.value = timeline;
+    })
+    .catch((err) => {
+      traceDetailError.value = (err as Error).message;
+    })
+    .finally(() => {
+      traceDetailLoading.value = false;
+    });
+}
+
 const traceColumns = computed<DataTableColumns<TraceSummary>>(() => [
   {
     title: t('usage.columns.traceId'),
@@ -247,6 +272,58 @@ const traceColumns = computed<DataTableColumns<TraceSummary>>(() => [
     key: 'createdAt',
     width: 200,
     render: (row) => new Date(row.createdAt).toLocaleString(),
+  },
+]);
+
+const traceStepColumns = computed<DataTableColumns<TraceTimeline['steps'][number]>>(() => [
+  {
+    title: t('usage.columns.stepIndex'),
+    key: 'stepIndex',
+    width: 60,
+  },
+  {
+    title: t('usage.columns.step'),
+    key: 'step',
+    width: 160,
+  },
+  {
+    title: t('usage.columns.target'),
+    key: 'requestedTargetName',
+    width: 160,
+    ellipsis: { tooltip: true },
+    render: (row) => row.requestedTargetName ?? '—',
+  },
+  {
+    title: t('usage.columns.upstream'),
+    key: 'upstreamKeyName',
+    width: 160,
+    ellipsis: { tooltip: true },
+    render: (row) => row.upstreamKeyName ?? '—',
+  },
+  {
+    title: t('usage.columns.model'),
+    key: 'realModelName',
+    width: 160,
+    ellipsis: { tooltip: true },
+    render: (row) => row.realModelName ?? '—',
+  },
+  {
+    title: t('usage.columns.latency'),
+    key: 'latencyMs',
+    width: 110,
+    render: (row) => (row.latencyMs === null ? '—' : `${row.latencyMs} ms`),
+  },
+  {
+    title: t('usage.columns.error'),
+    key: 'errorMessage',
+    width: 200,
+    ellipsis: { tooltip: true },
+    render: (row) =>
+      row.errorMessage
+        ? h(NText, { type: 'error' }, () => row.errorMessage)
+        : row.errorCode
+          ? h(NText, { type: 'error' }, () => row.errorCode)
+          : '—',
   },
 ]);
 
@@ -388,9 +465,41 @@ const consumptionColumns = computed<DataTableColumns<DailyConsumptionSummary>>((
           :single-line="false"
           :row-key="(r) => r.requestTraceId"
           :max-height="360"
+          :row-props="(row) => ({ style: { cursor: 'pointer' }, onClick: () => openTraceDetail(row.requestTraceId) })"
           :empty="h(NEmpty, { description: t('usage.empty.traces') })"
         />
       </NCard>
+
+      <NDrawer v-model:show="traceDrawerOpen" :width="720">
+        <NDrawerContent
+          :title="
+            selectedTrace
+              ? `${t('usage.traceDetail')} — ${selectedTrace.requestTraceId}`
+              : t('usage.traceDetail')
+          "
+          closable
+        >
+          <NSpace vertical size="large">
+            <NText v-if="traceDetailLoading" type="info">{{ t('common.loading') }}</NText>
+            <NText v-else-if="traceDetailError" type="error">{{
+              t('usage.traceSteps.loadError', { message: traceDetailError })
+            }}</NText>
+            <template v-else-if="selectedTrace">
+              <NText strong>{{ t('usage.traceSteps.title') }}</NText>
+              <NDataTable
+                :columns="traceStepColumns"
+                :data="selectedTrace.steps"
+                :bordered="false"
+                :single-line="false"
+                :row-key="(r) => r.id"
+                :max-height="520"
+                size="small"
+                :empty="h(NEmpty, { description: t('usage.empty.traces') })"
+              />
+            </template>
+          </NSpace>
+        </NDrawerContent>
+      </NDrawer>
 
       <NCard :title="t('usage.consumption')">
         <NDataTable

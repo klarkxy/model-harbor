@@ -863,8 +863,7 @@ export function registerUpstreamKeyRoutes(app: FastifyInstance, deps: UpstreamKe
 
     if (modelMappings && modelMappings.length > 0) {
       try {
-        const groupName = preset ? preset.name : name;
-        await onboardUpstreamKeyWithMappings(db, id, groupName, modelMappings);
+        await onboardUpstreamKeyWithMappings(db, id, modelMappings);
       } catch (err) {
         // Onboarding failure should not block the upstream key creation, but
         // we record the error in the response so the admin knows.
