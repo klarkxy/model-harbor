@@ -48,6 +48,31 @@ Constraints:
 - `sessionHash` unique.
 - Delete expired sessions in a background job.
 
+### admin_settings
+
+Singleton settings row (`id = 'default'`). Stores global routing and resilience configuration.
+
+Fields:
+
+- `id`
+- `circuitBreakerEnabled`
+- `circuitBreakerFailureThreshold`
+- `circuitBreakerBaseCooldownMs`
+- `circuitBreakerMaxCooldownMs`
+- `circuitBreakerHalfOpenSuccessCount`
+- `endpointHealthProbeEnabled`
+- `endpointHealthProbeIntervalMs`
+- `endpointHealthProbeTimeoutMs`
+- `endpointHealthProbeDegradedLatencyMs`
+- `firstTokenTimeoutMs`
+- `createdAt`
+- `updatedAt`
+
+Constraints:
+
+- Only the row with `id = 'default'` is used.
+- All numeric settings have clamped ranges enforced by the service layer.
+
 ### apps
 
 Application-level tenant boundary.
@@ -120,10 +145,16 @@ Fields:
 - `name`
 - `providerType`
 - `baseUrl`
+- `authType`
 - `apiKeyCiphertext`
 - `apiKeyPrefix`
+- `authConfigCiphertext`
 - `defaultHeadersJson`
+- `extraHeadersJson`
+- `extraParamsJson`
 - `supportedModelsJson`
+- `endpointsJson`
+- `providerPresetId`
 - `enabled`
 - `frozen`
 - `frozenReason`
@@ -141,9 +172,65 @@ Constraints:
 
 Notes:
 
-- `providerType` starts with `anthropic_compatible` and `openai_compatible`.
+- `providerType` includes `anthropic_compatible`, `openai_compatible`, `coze`, `codex`.
+- `authType` controls how the upstream request is authenticated (`pat`, `coze_oauth_jwt`, `coze_oauth_pkce`, `codex_oauth`).
+- `endpointsJson` stores the multi-endpoint configuration: `[{ protocol, baseUrl, providerType, apiPath? }]`. When absent, routing falls back to `baseUrl`.
 - `supportedModelsJson` is acceptable for MVP; a normalized table can be introduced later if needed.
 - Raw upstream API key is never returned after creation.
+
+### circuit_breakers
+
+Per `(upstreamKeyId, realModelName)` circuit breaker state.
+
+Fields:
+
+- `id`
+- `upstreamKeyId`
+- `realModelName`
+- `state` — `closed`, `open`, or `half_open`.
+- `failureCount`
+- `successCount`
+- `openCount`
+- `openedAt`
+- `cooldownUntil`
+- `lastErrorCode`
+- `lastErrorMessage`
+- `updatedAt`
+
+Constraints:
+
+- Unique on `upstreamKeyId + realModelName`.
+
+Notes:
+
+- `openCount` drives exponential backoff duration.
+- `open` transitions to `half_open` automatically when `cooldownUntil` elapses.
+
+### upstream_endpoint_health
+
+Stores per-endpoint latency and degraded state from background HEAD probes.
+
+Fields:
+
+- `id`
+- `upstreamKeyId`
+- `endpointBaseUrl`
+- `delayMs`
+- `lastCheckedAt`
+- `degraded`
+- `errorCode`
+- `errorMessage`
+- `createdAt`
+- `updatedAt`
+
+Constraints:
+
+- Unique on `upstreamKeyId + endpointBaseUrl`.
+
+Notes:
+
+- `degraded` is true when the probe times out, returns 5xx, or `delayMs` exceeds the configured threshold.
+- Orphan rows are cleaned up when an upstream key is deleted or its endpoints are reconfigured.
 
 ### upstream_key_quotas
 
@@ -335,6 +422,8 @@ Fields:
 - `inputTokens`
 - `outputTokens`
 - `totalTokens`
+- `cacheReadTokens`
+- `cacheWriteTokens`
 - `status`
 - `errorCode`
 - `latencyMs`
@@ -344,6 +433,79 @@ Notes:
 
 - Store metadata and statistics only by default.
 - Do not store prompt or completion bodies unless an explicit future admin setting enables it.
+
+### request_trace_logs
+
+Per-step trace log for gateway requests.
+
+Fields:
+
+- `id`
+- `requestTraceId`
+- `step`
+- `stepIndex`
+- `appId`
+- `consumerKeyId`
+- `requestedTargetName`
+- `resolvedTargetType`
+- `resolvedTargetId`
+- `sourceProtocol`
+- `upstreamKeyId`
+- `upstreamKeyName`
+- `realModelName`
+- `endpointProtocol`
+- `filterReason`
+- `acceptedCount`
+- `droppedCount`
+- `fallbackCount`
+- `httpStatus`
+- `errorCategory`
+- `errorCode`
+- `errorMessage`
+- `attemptOrder`
+- `finalOutcome`
+- `latencyMs`
+- `createdAt`
+
+Constraints:
+
+- Indexes on `requestTraceId`, `createdAt`, `consumerKeyId`, `upstreamKeyId`.
+
+Notes:
+
+- Steps include `request_start`, `auth_success`, `target_resolve`, `candidates_expand`, `candidates_filter`, `sticky_hit`, `candidate_attempt`, `provider_error`, `circuit_breaker_open`, `first_token_timeout`, `success`, `error`, `request_complete`.
+- Trace logs are retained for 30 days by a background cleanup task.
+
+### model_consumption_stats
+
+Per-day aggregate consumption by upstream key and real model.
+
+Fields:
+
+- `id`
+- `upstreamKeyId`
+- `realModelName`
+- `dayDate`
+- `requestCount`
+- `successCount`
+- `errorCount`
+- `cacheReadTokens`
+- `cacheWriteTokens`
+- `inputTokens`
+- `outputTokens`
+- `totalTokens`
+- `avgLatencyMs`
+- `updatedAt`
+
+Constraints:
+
+- Unique on `upstreamKeyId + realModelName + dayDate`.
+- Indexes on `dayDate` and `upstreamKeyId + dayDate`.
+
+Notes:
+
+- Updated incrementally on every gateway request.
+- Data is retained permanently (no automatic cleanup).
 
 ## Secret Handling
 

@@ -62,6 +62,7 @@ apps/api/src/
   gateway/
   router/
   providers/
+  upstream/
   quota/
   sticky/
   usage/
@@ -76,7 +77,7 @@ Responsibilities:
 - Serve gateway routes.
 - Serve built web assets in production.
 - Read and write database state.
-- Run quota reset, cooldown cleanup, and health-check jobs.
+- Run quota reset, cooldown cleanup, health-check jobs, and upstream endpoint health probes.
 
 ### apps/web
 
@@ -132,7 +133,7 @@ For `POST /v1/messages`, `POST /v1/chat/completions`, and `POST /v1/responses`:
 4. Resolve the requested model name as either a public model or model group.
 5. Check consumer-key access permissions.
 6. Expand the target into `UpstreamKey + realModelName` candidates.
-7. Remove disabled, frozen, cooled-down, over-quota, or incompatible candidates.
+7. Remove disabled, frozen, cooled-down, over-quota, incompatible, or circuit-breaker-open candidates; then sort the remainder by endpoint health (non-degraded, lowest latency first).
 8. Compute the conversation fingerprint from stable message prefixes.
 9. Reuse a sticky binding if it points to a still-valid candidate.
 10. Otherwise select a candidate through the route policy and update the binding.
@@ -269,6 +270,8 @@ Cache invalidation must be explicit after admin writes.
 
 Sticky bindings, quota counters, and cooldown state should be stored durably enough that a restart does not lose essential routing behavior. In-memory acceleration is acceptable, but database state should remain authoritative for MVP.
 
+Circuit breaker state (`circuit_breakers`) and endpoint health (`upstream_endpoint_health`) are also persisted in SQLite so that routing decisions survive restarts.
+
 ## Streaming
 
 Streaming is a first-class requirement.
@@ -280,6 +283,7 @@ The gateway must:
 - Convert upstream provider stream events back to the client-facing protocol.
 - Record final usage when the provider sends usage in a terminal event.
 - Record partial failure metadata if a stream fails after headers have been sent.
+- Support first-token timeout failover: when multiple candidates exist and `firstTokenTimeoutMs` is configured, race the first SSE event against the timeout, cancel the slow upstream on timeout, and continue the stream from the next candidate.
 
 Streaming tests should use fake upstream servers rather than live providers.
 

@@ -544,18 +544,29 @@ describe('M5 streaming: client disconnect aborts the upstream request', () => {
   it('aborts the upstream request and records an error usage row when the client disconnects mid-stream', async () => {
     // Per-event delay so the stream runs longer than the client abort.
     rig.fake.setAnthropicStream({ events: anthropicStreamFrames, delayMs: 40 });
-    const { promise } = postSseWithAbort(
+    const { promise, abort } = postSseWithAbort(
       rig,
       '/v1/messages',
       ANTHROPIC_STREAM_BODY,
       { 'x-api-key': rig.rawConsumerKey },
-      200,
+      10_000,
     );
-    await promise.catch(() => ({ statusCode: 0, body: '' }));
+
+    // Wait until the fake upstream has definitely received the request before
+    // aborting the client. A fixed timer is flaky because gateway auth/target
+    // resolution may still be in progress when the timer fires.
+    const waitStart = Date.now();
+    while (rig.fake.anthropicRequests.length === 0 && Date.now() - waitStart < 1000) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
 
     // The fake upstream received the stream request with stream: true.
     expect(rig.fake.anthropicRequests).toHaveLength(1);
     expect(rig.fake.anthropicRequests[0]!.body).toMatchObject({ stream: true });
+
+    // Now tear down the client socket mid-stream.
+    abort();
+    await promise.catch(() => ({ statusCode: 0, body: '' }));
 
     // driveStream records an error row tagged client_disconnected after
     // the upstream fetch is aborted. Poll for it because the server is

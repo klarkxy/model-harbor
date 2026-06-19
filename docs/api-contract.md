@@ -477,6 +477,133 @@ Query parameters: `limit` (max 500, default 100).
 
 Returns recent usage records with request, target, upstream key, latency, and status.
 
+### Settings
+
+#### GET /api/admin/settings
+
+Returns the global resilience and streaming settings.
+
+Response:
+
+```json
+{
+  "circuitBreaker": {
+    "enabled": true,
+    "failureThreshold": 5,
+    "baseCooldownMs": 60000,
+    "maxCooldownMs": 600000,
+    "halfOpenSuccessCount": 2
+  },
+  "endpointHealth": {
+    "probeEnabled": true,
+    "probeIntervalMs": 3600000,
+    "probeTimeoutMs": 10000,
+    "degradedLatencyMs": 5000
+  },
+  "streaming": {
+    "firstTokenTimeoutMs": 15000
+  }
+}
+```
+
+#### PUT /api/admin/settings
+
+Updates one or more setting groups. Only provided groups are modified; omitted groups keep current values.
+
+Request:
+
+```json
+{
+  "circuitBreaker": {
+    "enabled": true,
+    "failureThreshold": 5
+  },
+  "endpointHealth": {
+    "probeEnabled": true,
+    "probeIntervalMs": 3600000
+  },
+  "streaming": {
+    "firstTokenTimeoutMs": 15000
+  }
+}
+```
+
+Response mirrors `GET /api/admin/settings` with the updated values.
+
+Validation notes:
+
+- `firstTokenTimeoutMs` is clamped to `0 ~ 300000`.
+- `probeIntervalMs` and `probeTimeoutMs` have minimum floors enforced by the service layer.
+- `failureThreshold` and `halfOpenSuccessCount` must be at least 1.
+
+### Circuit Breakers
+
+#### GET /api/admin/circuit-breakers
+
+Query parameters: `state` (`closed`, `open`, `half_open`) and `limit` (max 500, default 100).
+
+Returns per `(upstreamKeyId, realModelName)` circuit breaker state.
+
+Response:
+
+```json
+{
+  "items": [
+    {
+      "id": "cb_...",
+      "upstreamKeyId": "uk_...",
+      "upstreamKeyName": "DeepSeek key 1",
+      "realModelName": "ds-v4-flash",
+      "state": "open",
+      "failureCount": 5,
+      "successCount": 0,
+      "openCount": 1,
+      "openedAt": 1718880000000,
+      "cooldownUntil": 1718880600000,
+      "lastErrorCode": "provider_rate_limit",
+      "lastErrorMessage": "rate limited"
+    }
+  ]
+}
+```
+
+#### POST /api/admin/circuit-breakers/:id/reset
+
+Manually resets a circuit breaker to `closed` and clears its failure / success counts.
+
+Response:
+
+```json
+{ "ok": true }
+```
+
+### Upstream Endpoint Health
+
+#### GET /api/admin/upstream-endpoint-health
+
+Query parameters: `upstreamKeyId` (optional).
+
+Returns the latest per-endpoint latency probe results.
+
+Response:
+
+```json
+{
+  "items": [
+    {
+      "id": "eh_...",
+      "upstreamKeyId": "uk_...",
+      "endpointBaseUrl": "https://api.example.com",
+      "delayMs": 120,
+      "lastCheckedAt": 1718880000000,
+      "degraded": false,
+      "errorCode": null,
+      "errorMessage": null
+    }
+  ]
+}
+```
+
 ## Naming And IDs
 
 MVP can use string IDs with prefixes:

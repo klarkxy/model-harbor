@@ -100,6 +100,16 @@ GET /readyz
 
 Do not include secret values or sensitive configuration in health responses.
 
+## Routing Resilience
+
+The gateway uses the following resilience mechanisms:
+
+- **Circuit breaker**: tracked per `(upstreamKeyId, realModelName)`. When open, the candidate is skipped until the cooldown elapses and half-open probing succeeds.
+- **Endpoint health probes**: a background task sends lightweight `HEAD` requests to each upstream endpoint base URL. Probe delay and degraded state are persisted in `upstream_endpoint_health` and used to sort candidates before selection.
+- **First-token timeout**: for streaming requests with multiple candidates, the gateway races the first SSE event against `firstTokenTimeoutMs`. On timeout it cancels the slow upstream body reader and fails over to the next candidate, preserving the captured first event in the returned stream.
+
+All three are configurable via `GET /api/admin/settings` and `PUT /api/admin/settings`.
+
 ## Logging
 
 Recommended logs:

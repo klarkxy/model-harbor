@@ -67,6 +67,7 @@ Table columns:
 - Remaining quota.
 - Last used.
 - Last error.
+- Endpoint latency / degraded status (from background HEAD probes).
 
 Actions:
 
@@ -84,6 +85,7 @@ Form fields:
 - Base URL.
 - API key.
 - Supported models.
+- Endpoints (multi-endpoint preset override).
 - Request limit.
 - Input token limit.
 - Output token limit.
@@ -93,6 +95,12 @@ Form fields:
 - Period.
 
 Raw API key should only be accepted as input and never displayed again.
+
+Endpoint health detail:
+
+- List each endpoint base URL.
+- Show latest probe delay, degraded flag, error code, and last checked time.
+- Aggregate best / degraded counts per upstream key.
 
 ## Public Models
 
@@ -249,6 +257,9 @@ MVP settings:
 - Admin profile.
 - Change password.
 - Instance information.
+- Circuit Breaker: enable/disable, failure threshold, base/max cooldown, half-open success count.
+- Endpoint Health Probe: enable/disable, probe interval, probe timeout, degraded latency threshold.
+- Streaming: first-token timeout (`firstTokenTimeoutMs`, `0` disables failover).
 - Logging settings placeholder.
 
 Future settings:

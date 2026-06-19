@@ -63,32 +63,38 @@
 > 来源：octopus（最直接）、cc-switch（Circuit Breaker 细节）。
 > 目标：把路由层从“failover + cooldown”升级为具备 Circuit Breaker、延迟感知、Sticky Session、Group 负载均衡、First-Token 超时切换的韧性路由层。
 
-### 7.1 Circuit Breaker（断路器）
+### 7.1 Circuit Breaker（断路器） ✅ 已完成
 
-- **落点**：`apps/api/src/modules/router/circuit-breaker.ts`
+- **落点**：`apps/api/src/modules/router/circuit-breaker.ts`、`apps/api/src/modules/admin/settings.ts`
 - **设计**：
-  - 三态：`Closed` / `Open` / `HalfOpen`。
+  - 三态：`closed` / `open` / `half_open`，持久化在 `circuit_breakers` 表。
   - 颗粒度：`(upstreamKeyId, realModelName)`，与 octopus 对齐。
-  - 触发：连续失败 >= 5 次；HalfOpen 成功 >= 2 次后关闭。
-  - 指数退避：基础 60s，最大 600s，每次触发翻倍。
+  - 触发：连续失败 >= `failureThreshold`（默认 5 次）；`half_open` 状态下连续成功 >= `halfOpenSuccessCount`（默认 2 次）后关闭。
+  - 指数退避：基础 `baseCooldownMs`（默认 60s），最大 `maxCooldownMs`（默认 600s），每次触发翻倍。
   - 与现有 cooldown 协同：CB Open 时直接跳过候选，同时触发 cooldown。
-- **配置**：`admin_settings.circuit_breaker_enabled`（默认 true）、`failure_threshold`、`base_cooldown_ms`、`max_cooldown_ms`。
+  - 自动状态迁移：`open` 达到 cooldown 后自动进入 `half_open`；`closed` 成功后重置失败计数。
+- **配置**：`admin_settings` 中的 `circuitBreakerEnabled`、`circuitBreakerFailureThreshold`、`circuitBreakerBaseCooldownMs`、`circuitBreakerMaxCooldownMs`、`circuitBreakerHalfOpenSuccessCount`。
+- **管理 API**：`GET /api/admin/settings`、`PUT /api/admin/settings`、`GET /api/admin/circuit-breakers`、`POST /api/admin/circuit-breakers/:id/reset`。
+- **UI**：Settings 页面 Circuit Breaker 卡片；可查看并手动重置各 (upstreamKey, model) 的 CB 状态。
 - **验收**：
-  - 同一 (key, model) 连续失败 5 次后，第 6 次请求不再尝试该候选。
+  - 同一 (key, model) 连续失败阈值次后，后续请求不再尝试该候选。
   - Open 状态持续期间，trace log 中标记 `circuit_breaker_open`。
   - HalfOpen 成功后恢复流量。
 
-### 7.2 多端点延迟探测
+### 7.2 多端点延迟探测 ✅ 已完成
 
-- **落点**：`apps/api/src/modules/upstream/endpoint-health.ts`、`apps/api/src/modules/jobs/index.ts`
+- **落点**：`apps/api/src/modules/upstream/endpoint-health.ts`、`apps/api/src/modules/jobs/index.ts`、`apps/api/src/modules/router/candidates.ts`
 - **设计**：
-  - `upstream_keys.endpoints` JSON 字段： `[{ url, delayMs, lastCheckedAt, enabled }]`。
-  - 后台任务每小时对每个 endpoint 发 HEAD 请求探测延迟。
-  - 路由时优先选择 delay 最小的 endpoint；若该 endpoint 在 cooldown/CB 中，则选下一个。
-- **UI**：Upstream Keys 详情页展示 endpoint 延迟列表。
+  - `upstream_keys.endpoints_json` 字段描述多端点：`[{ protocol, baseUrl, providerType, apiPath? }]`；未配置多端点时回退到 `baseUrl`。
+  - 独立表 `upstream_endpoint_health` 按 `(upstreamKeyId, endpointBaseUrl)` 存储最近一次探测延迟、degraded 标志、错误码。
+  - 后台任务按 `admin_settings.endpointHealthProbeIntervalMs`（默认 1h）对每个 endpoint 发 HEAD 请求；超时 `endpointHealthProbeTimeoutMs`（默认 10s）；超过 `endpointHealthProbeDegradedLatencyMs`（默认 5s）或 5xx/transport 错误视为 degraded。
+  - 路由候选排序：`degraded=false` 优先，再按 `delayMs` 升序，其次 `priority` 升序，`weight` 降序。
+  - 删除上游 key 或重配 endpoints 后自动清理孤儿健康记录。
+- **UI**：Upstream Keys 列表/详情页展示 aggregate 延迟与 degraded 计数；详情页展示每个 endpoint 的探测记录。
+- **管理 API**：`GET /api/admin/upstream-endpoint-health?upstreamKeyId=...`。
 - **验收**：
-  - 同一 upstream key 配置多个 endpoint 后，流量优先走延迟最低的可用 endpoint。
-  - 最高延迟 endpoint 被标记为 degraded 时不被选中。
+  - 同一 upstream key 配置多个 endpoint 后，流量优先走延迟最低且非 degraded 的 endpoint。
+  - degraded endpoint 在排序中靠后，不被优先选中。
 
 ### 7.3 Sticky Session（短窗口粘性）
 
@@ -117,16 +123,29 @@
   - 创建 group 时可选择 load balance mode。
   - 不同 mode 下相同候选集合产生可预期的选中分布。
 
-### 7.5 First-Token 超时切换
+### 7.5 First-Token 超时切换 ✅ 已完成
 
-- **落点**：`apps/api/src/modules/gateway/stream-handler.ts`
+- **落点**：`apps/api/src/modules/gateway/stream-handler.ts`、`apps/api/src/modules/gateway/stream-sender.ts`
 - **设计**：
-  - 流式请求启动后，首个 token 必须在 `first_token_timeout_ms`（默认 15s）内到达。
-  - 超时后：标记当前候选失败（计入 CB）→ 尝试下一个候选 → 继续流式响应。
-  - 只在 group 或多候选场景启用，避免单候选无限重试。
+  - 管理配置 `admin_settings.first_token_timeout_ms`（默认 15s，范围 0 ~ 300s，0 表示关闭）。
+  - 流式请求在 `startUpstreamStream` 建立连接后，`waitForFirstToken` 会竞速首个 SSE 事件与超时计时器。
+  - 超时后：记录 trace log 步骤 `first_token_timeout`，将失败计入 circuit breaker 与 cooldown，并携带父 abort signal 取消慢上游 body reader，然后 failover 到下一个候选。
+  - 首个正常事件通过 `prependFirstEvent` 重新注入异步迭代器，保证 `driveStream` 无需改动即可消费完整流。
+  - 只在存在多个候选时启用；单候选不会无限重试。
+- **UI**：Settings 页面新增 Streaming 卡片，可配置 `firstTokenTimeoutMs`。
 - **验收**：
-  - 模拟上游延迟 20s 不返回首个 token，请求在 15s 后自动切换到备用候选。
+  - 模拟上游建立连接后 20s 不返回首个 token，请求在 15s 后自动切换到备用候选。
   - trace log 中记录 `first_token_timeout` 事件和切换后的 candidate。
+
+### 阶段七实施状态
+
+| 任务 | 状态 | 关键文件 |
+|------|------|----------|
+| 7.1 Circuit Breaker | ✅ 已完成 | `apps/api/src/modules/router/circuit-breaker.ts`, `apps/api/src/modules/admin/settings.ts`, `apps/web/src/pages/Settings.vue` |
+| 7.2 多端点延迟探测 | ✅ 已完成 | `apps/api/src/modules/upstream/endpoint-health.ts`, `apps/api/src/modules/jobs/index.ts`, `apps/web/src/pages/UpstreamKeys.vue` |
+| 7.3 Sticky Session | ⏳ 待做 | - |
+| 7.4 Group 负载均衡 | ⏳ 待做 | - |
+| 7.5 First-Token 超时切换 | ✅ 已完成 | `apps/api/src/modules/gateway/stream-handler.ts`, `apps/api/src/modules/gateway/stream-sender.ts`, `apps/web/src/pages/Settings.vue` |
 
 ---
 
@@ -453,11 +472,11 @@
 [阶段五] 缓存 Token 字段                           │
    │                                                │
 [阶段七] 路由韧性融合                              │
-   ├── 7.1 Circuit Breaker                          │
-   ├── 7.2 多端点延迟探测                           │
+   ├── ✅ 7.1 Circuit Breaker                       │
+   ├── ✅ 7.2 多端点延迟探测                        │
    ├── 7.3 Sticky Session                           │
    ├── 7.4 Group 负载均衡                           │
-   └── 7.5 First-Token 超时切换                     │
+   └── ✅ 7.5 First-Token 超时切换                  │
    │                                                │
 [阶段八] Provider 生态融合                         │
    ├── 8.1 Provider Descriptor + 预设库             │
