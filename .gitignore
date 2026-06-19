@@ -6,6 +6,7 @@ build/
 .cache/
 coverage/
 *.log
+logs/
 .DS_Store
 .env
 .env.local

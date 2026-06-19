@@ -15,6 +15,12 @@ async function main(): Promise<void> {
     }
   }
 
+  // Make sure the log directory exists before pino opens the file. We
+  // skip this when LOG_FILE points at stdout (empty / "-" / "1").
+  if (env.LOG_FILE && env.LOG_FILE !== '-' && env.LOG_FILE !== '1') {
+    mkdirSync(dirname(env.LOG_FILE), { recursive: true });
+  }
+
   const { db, client } = createDb({ url: env.DATABASE_URL });
   await initSchema(db);
 

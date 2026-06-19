@@ -9,6 +9,7 @@
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import fastifyCookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
+import pino from 'pino';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { createEnv } from './config/env.js';
@@ -58,9 +59,31 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
   const logger =
     options.logger !== undefined
       ? options.logger
-      : isProduction
-        ? { level: env.LOG_LEVEL }
-        : { level: env.LOG_LEVEL };
+      : (() => {
+          // Tee pino's output to stdout (always) and to LOG_FILE (when set
+          // to a real path). When LOG_FILE is "-" / "1" we treat it as a
+          // sentinel meaning "stdout only" so dev/test can disable the file
+          // sink via env without code changes.
+          const pinoNs = pino as unknown as {
+            destination: (opts: { dest: string; mkdir: boolean }) => NodeJS.WritableStream;
+            multistream: (
+              s: Array<{ level: string; stream: NodeJS.WritableStream }>,
+            ) => NodeJS.WritableStream;
+          };
+          const streams: Array<{ level: string; stream: NodeJS.WritableStream }> = [
+            { level: env.LOG_LEVEL, stream: process.stdout },
+          ];
+          if (env.LOG_FILE && env.LOG_FILE !== '-' && env.LOG_FILE !== '1') {
+            streams.push({
+              level: env.LOG_LEVEL,
+              stream: pinoNs.destination({ dest: env.LOG_FILE, mkdir: false }),
+            });
+          }
+          return {
+            level: env.LOG_LEVEL,
+            stream: pinoNs.multistream(streams),
+          };
+        })();
 
   const app = Fastify({ logger });
 

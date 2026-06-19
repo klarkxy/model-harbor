@@ -13,6 +13,9 @@ const PREFIXES = {
   healthEvent: 'he',
   auditEvent: 'ae',
   oauth: 'oa',
+  consumptionStat: 'cs',
+  trace: 'tr',
+  traceLog: 'trl',
 } as const;
 
 export type IdKind = keyof typeof PREFIXES;

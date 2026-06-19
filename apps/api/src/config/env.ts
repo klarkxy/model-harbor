@@ -3,6 +3,7 @@ export interface Env {
   HOST: string;
   PORT: number;
   LOG_LEVEL: string;
+  LOG_FILE: string;
   DATABASE_URL: string;
   SECRET_KEY: string;
   ADMIN_USERNAME: string;
@@ -15,6 +16,7 @@ const DEFAULTS: Env = {
   HOST: '0.0.0.0',
   PORT: 3000,
   LOG_LEVEL: 'info',
+  LOG_FILE: './logs/app.log',
   DATABASE_URL: 'file:./data/modelharbor.sqlite',
   SECRET_KEY: 'dev-secret-change-me',
   ADMIN_USERNAME: 'admin',
@@ -44,6 +46,7 @@ function readEnv(): Env {
     HOST: process.env['MODELHARBOR_HOST'] ?? DEFAULTS.HOST,
     PORT: readNumber('MODELHARBOR_PORT', DEFAULTS.PORT),
     LOG_LEVEL: process.env['MODELHARBOR_LOG_LEVEL'] ?? DEFAULTS.LOG_LEVEL,
+    LOG_FILE: process.env['MODELHARBOR_LOG_FILE'] ?? DEFAULTS.LOG_FILE,
     DATABASE_URL: process.env['MODELHARBOR_DATABASE_URL'] ?? DEFAULTS.DATABASE_URL,
     SECRET_KEY: process.env['MODELHARBOR_SECRET_KEY'] ?? DEFAULTS.SECRET_KEY,
     ADMIN_USERNAME: process.env['MODELHARBOR_ADMIN_USERNAME'] ?? DEFAULTS.ADMIN_USERNAME,

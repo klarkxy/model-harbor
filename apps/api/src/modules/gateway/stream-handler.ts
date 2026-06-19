@@ -14,6 +14,7 @@ import {
   codexRequestToIR,
   getProviderAdapter,
 } from '../providers/index.js';
+import { type NormalizedProviderError } from '../providers/types.js';
 import { type Db } from '../db/index.js';
 import { resolveAuthorizationHeader } from '../providers/auth/index.js';
 import { assertConsumerKeyAccess } from '../router/access.js';
@@ -70,7 +71,7 @@ const FAILOVER_CATEGORIES: ReadonlySet<string> = new Set([
 ]);
 
 interface NormalizedErrorLite {
-  category: string;
+  category: NormalizedProviderError['category'];
   providerCode: string | null;
   providerMessage: string | null;
   upstreamStatus: number;
@@ -240,7 +241,7 @@ export async function handleStreamRequest(
         realModelName: candidate.realModelName,
         attemptOrder: attempts,
         errorCategory: lastError.category,
-        errorMessage: lastError.providerMessage,
+        errorMessage: lastError.providerMessage ?? undefined,
       });
       await tryCooldown(
         ctx,
@@ -736,6 +737,8 @@ async function recordUsageOnFailure(
     inputTokens: null,
     outputTokens: null,
     totalTokens: null,
+    cacheReadTokens: null,
+    cacheWriteTokens: null,
     status: 'error',
     errorCode: err.providerCode ?? err.category,
     latencyMs,
