@@ -112,6 +112,7 @@ const messages = {
     new: '建立上游金鑰',
     empty: '暫無上游金鑰',
     columns: {
+      order: '拖動',
       name: '名稱',
       provider: '提供者',
       baseUrl: 'Base URL',
@@ -125,6 +126,7 @@ const messages = {
       frozen: '已凍結',
     },
     actions: {
+      drag: '拖動調整預設順序',
       freeze: '凍結',
       unfreeze: '解凍',
     },
@@ -133,6 +135,7 @@ const messages = {
       unfreeze: '解凍此金鑰？',
     },
     toast: {
+      orderSaved: '上游金鑰順序已儲存',
       created: '上游金鑰已建立',
       frozen: '已凍結',
       unfrozen: '已解凍',
@@ -180,13 +183,46 @@ const messages = {
       disabled: '已停用',
     },
     actions: {
+      arrange: '編排',
       delete: '刪除',
     },
     confirm: '刪除 {name}？',
     toast: {
       created: '公共模型已建立',
+      arrangementReset: '已重設為上游金鑰預設順序',
+      arrangementSaved: '候選編排已儲存',
       deleted: '已刪除',
       createUpstreamKeyFirst: '請先建立一個上游金鑰',
+    },
+    arrange: {
+      title: '編排 {name}',
+      previewTitle: '實際嘗試順序預覽',
+      previewHint:
+        '不可用候選會被跳過；請求時端點健康狀態和 Sticky 綁定仍可能把可用候選提前。',
+      emptyPreview: '目前編排中沒有已啟用且可用的候選。',
+      emptyCandidates: '暫無候選',
+      moveUp: '上移',
+      moveDown: '下移',
+      reset: '重設預設順序',
+      resetConfirm: '按目前上游金鑰順序重設候選編排？',
+      dragHandle: '拖動調整順序',
+      priority: '優先級',
+      weight: '權重',
+      columns: {
+        order: '拖動',
+        upstreamKey: '上游金鑰',
+        realModelName: '真實模型',
+        status: '狀態',
+        provider: '提供商',
+      },
+      status: {
+        missing: '上游缺失',
+        upstreamDisabled: '上游已停用',
+        frozen: '已凍結',
+        degraded: '效能降級',
+        healthy: '健康',
+        ready: '可用',
+      },
     },
     drawer: {
       title: '建立公共模型',

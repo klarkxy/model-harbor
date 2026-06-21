@@ -1,4 +1,4 @@
-import { eq, desc, and, sql } from 'drizzle-orm';
+import { asc, eq, and, sql } from 'drizzle-orm';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import {
   generateId,
@@ -19,9 +19,7 @@ import {
   upstreamKeyQuotas,
   upstreamKeys,
 } from '../db/tables/upstream.js';
-import {
-  publicModelCandidates,
-} from '../db/tables/models.js';
+import { publicModelCandidates, publicModels } from '../db/tables/models.js';
 import {
   listUpstreamEndpointHealth,
   pruneOrphanEndpointHealth,
@@ -51,6 +49,7 @@ import { encryptSecret } from '../auth/crypto.js';
 import {
   getUpstreamKeyCandidates,
   onboardUpstreamKeyWithMappings,
+  resetPublicModelCandidateOrder,
   syncUpstreamKeyMappings,
   type OnboardingMapping,
   type UpstreamKeyCandidateMapping,
@@ -165,6 +164,7 @@ function presentUpstreamKey(
     candidateCount,
     endpoints: row.endpointsJson ? parseEndpoints(row.endpointsJson) : [],
     providerPresetId: row.providerPresetId,
+    displayOrder: row.displayOrder,
     enabled: row.enabled,
     frozen: row.frozen,
     frozenReason: row.frozenReason,
@@ -799,7 +799,11 @@ export function registerUpstreamKeyRoutes(app: FastifyInstance, deps: UpstreamKe
   const { db, secretKey } = deps;
 
   app.get('/api/admin/upstream-keys', async () => {
-    const rows = await db.select().from(upstreamKeys).orderBy(desc(upstreamKeys.createdAt)).all();
+    const rows = await db
+      .select()
+      .from(upstreamKeys)
+      .orderBy(asc(upstreamKeys.displayOrder), asc(upstreamKeys.createdAt))
+      .all();
     const quotas = await db.select().from(upstreamKeyQuotas).all();
     const byId = new Map(quotas.map((q) => [q.upstreamKeyId, q]));
     const counters = await db.select().from(upstreamKeyCounters).all();
@@ -827,6 +831,32 @@ export function registerUpstreamKeyRoutes(app: FastifyInstance, deps: UpstreamKe
         ),
       ),
     };
+  });
+
+  app.put('/api/admin/upstream-keys/order', async (req) => {
+    const body = (req.body ?? {}) as { ids?: unknown };
+    if (!Array.isArray(body.ids) || !body.ids.every((id) => typeof id === 'string')) {
+      throw new ValidationError('ids must be an array of upstream key ids');
+    }
+    const ids = body.ids as string[];
+    const now = new Date();
+    await db.transaction(async (tx) => {
+      for (let idx = 0; idx < ids.length; idx += 1) {
+        await tx
+          .update(upstreamKeys)
+          .set({ displayOrder: (idx + 1) * 10, updatedAt: now })
+          .where(eq(upstreamKeys.id, ids[idx]!));
+      }
+    });
+    const defaultModels = await db
+      .select({ id: publicModels.id })
+      .from(publicModels)
+      .where(eq(publicModels.candidateOrderCustomized, false))
+      .all();
+    for (const model of defaultModels) {
+      await resetPublicModelCandidateOrder(db, model.id, false);
+    }
+    return { ids };
   });
 
   // M10: list endpoint health (latency probe results). Optionally filter by
@@ -960,6 +990,13 @@ export function registerUpstreamKeyRoutes(app: FastifyInstance, deps: UpstreamKe
 
     const id = generateId('upstreamKey');
     const now = new Date();
+    const maxOrder =
+      (
+        await db
+          .select({ maxOrder: sql<number>`max(${upstreamKeys.displayOrder})` })
+          .from(upstreamKeys)
+          .get()
+      )?.maxOrder ?? 0;
 
     const extraHeaders =
       body.extraHeaders !== undefined
@@ -991,6 +1028,7 @@ export function registerUpstreamKeyRoutes(app: FastifyInstance, deps: UpstreamKe
       stickySessionTtlMs,
       endpointsJson: endpoints.length > 0 ? JSON.stringify(endpoints) : null,
       providerPresetId: preset ? preset.id : null,
+      displayOrder: maxOrder + 10,
       enabled: true,
       frozen: false,
       createdAt: now,
@@ -1239,6 +1277,7 @@ export function registerUpstreamKeyRoutes(app: FastifyInstance, deps: UpstreamKe
         supportedModelsJson: source.supportedModelsJson,
         endpointsJson: source.endpointsJson,
         providerPresetId: source.providerPresetId,
+        displayOrder: source.displayOrder + 10,
         stickySessionTtlMs: source.stickySessionTtlMs,
         enabled: true,
         frozen: false,

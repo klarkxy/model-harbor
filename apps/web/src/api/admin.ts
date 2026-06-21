@@ -24,6 +24,7 @@ export interface UpstreamKey {
   candidateCount: number;
   endpoints?: ProviderPresetEndpoint[];
   providerPresetId: string | null;
+  displayOrder: number;
   enabled: boolean;
   frozen: boolean;
   frozenReason: string | null;
@@ -179,6 +180,7 @@ export const upstreamKeysApi = {
     }),
   duplicate: (id: string, payload: UpstreamKeyDuplicatePayload) =>
     api.post<UpstreamKey>(`/api/admin/upstream-keys/${id}/duplicate`, payload),
+  setOrder: (ids: string[]) => api.put<{ ids: string[] }>('/api/admin/upstream-keys/order', { ids }),
   ping: (id: string, payload: UpstreamKeyPingPayload) =>
     api.post<UpstreamKeyPingResult>(`/api/admin/upstream-keys/${id}/ping`, payload),
   delete: (id: string) =>
@@ -249,6 +251,10 @@ export interface PublicModelCandidate {
   priority: number;
   weight: number;
   enabled: boolean;
+  endpointProtocol: 'anthropic' | 'openai' | 'codex' | null;
+  endpointProviderType: 'anthropic_compatible' | 'openai_compatible' | 'coze' | 'codex' | null;
+  endpointBaseUrl: string | null;
+  endpointApiPath: string | null;
   upstreamKey: {
     id: string;
     name: string;
@@ -264,6 +270,7 @@ export interface PublicModel {
   displayName: string | null;
   description: string | null;
   enabled: boolean;
+  candidateOrderCustomized: boolean;
   candidateCount: number;
   createdAt: string;
   updatedAt: string;
@@ -280,6 +287,10 @@ export interface PublicModelCreatePayload {
     priority?: number;
     weight?: number;
     enabled?: boolean;
+    endpointProtocol?: 'anthropic' | 'openai' | 'codex';
+    endpointProviderType?: 'anthropic_compatible' | 'openai_compatible' | 'coze' | 'codex';
+    endpointBaseUrl?: string;
+    endpointApiPath?: string | null;
   }>;
 }
 
@@ -292,6 +303,11 @@ export const publicModelsApi = {
     api.put<{ candidates: PublicModelCandidate[] }>(`/api/admin/public-models/${id}/candidates`, {
       candidates: candidates ?? [],
     }),
+  resetCandidateOrder: (id: string) =>
+    api.post<{ candidates: PublicModelCandidate[] }>(
+      `/api/admin/public-models/${id}/candidates/reset-order`,
+      {},
+    ),
   remove: (id: string) =>
     api.delete<{ id: string; deleted: boolean }>(`/api/admin/public-models/${id}`),
 };

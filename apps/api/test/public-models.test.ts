@@ -5,7 +5,7 @@ import {
   targetNames,
   publicModelCandidates,
   upstreamKeys,
-} from '../src/modules/db/index.js';
+} from '../src/modules/db/schema.js';
 import { makeAdminRig, seedFullRoute, type AdminTestRig } from './helper.js';
 
 describe('public models admin', () => {
@@ -82,8 +82,20 @@ describe('public models admin', () => {
       headers: { cookie: rig.cookie },
       payload: {
         candidates: [
-          { upstreamKeyId: refs.upstreamKeyId, realModelName: 'ds-mini-v1', priority: 10 },
-          { upstreamKeyId: refs.upstreamKeyId, realModelName: 'ds-mini-v2', priority: 20 },
+          {
+            upstreamKeyId: refs.upstreamKeyId,
+            realModelName: 'ds-mini-v1',
+            priority: 10,
+            weight: 3,
+            enabled: false,
+          },
+          {
+            upstreamKeyId: refs.upstreamKeyId,
+            realModelName: 'ds-mini-v2',
+            priority: 20,
+            weight: 7,
+            enabled: true,
+          },
         ],
       },
     });
@@ -96,6 +108,19 @@ describe('public models admin', () => {
     expect(candidates).toHaveLength(2);
     const names = candidates.map((c) => c.realModelName).sort();
     expect(names).toEqual(['ds-mini-v1', 'ds-mini-v2']);
+    const byName = new Map(candidates.map((c) => [c.realModelName, c]));
+    expect(byName.get('ds-mini-v1')).toMatchObject({
+      priority: 10,
+      weight: 3,
+      enabled: false,
+    });
+    expect(byName.get('ds-mini-v2')).toMatchObject({
+      priority: 20,
+      weight: 7,
+      enabled: true,
+    });
+    const publicModel = await rig.db.select().from(publicModels).where(eq(publicModels.id, id)).get();
+    expect(publicModel?.candidateOrderCustomized).toBe(true);
   });
 
   it('deletes a public model and its target_names row together', async () => {

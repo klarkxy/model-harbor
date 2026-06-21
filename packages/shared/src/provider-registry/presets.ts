@@ -24,6 +24,8 @@ function preset(desc: Omit<ProviderDescriptor, 'capabilities'>): ProviderDescrip
   };
 }
 
+const MODELHARBOR_USER_AGENT = 'ModelHarbor/0.1';
+
 export const PROVIDER_PRESETS: readonly ProviderDescriptor[] = [
   preset({
     id: 'agnes-ai',
@@ -206,6 +208,7 @@ export const PROVIDER_PRESETS: readonly ProviderDescriptor[] = [
         providerType: 'anthropic_compatible',
       },
     ],
+    defaultExtraHeaders: { 'User-Agent': MODELHARBOR_USER_AGENT },
     guideUrl: '/docs/provider-guides/kimi-code.md',
   }),
   preset({
@@ -302,6 +305,7 @@ export const PROVIDER_PRESETS: readonly ProviderDescriptor[] = [
         providerType: 'anthropic_compatible',
       },
     ],
+    defaultExtraHeaders: { 'User-Agent': MODELHARBOR_USER_AGENT },
     modelSyncUrl: 'https://opencode.ai/zen/go/v1/models',
     guideUrl: '/docs/provider-guides/opencode-go.md',
     defaultModel: 'deepseek-v4-flash',

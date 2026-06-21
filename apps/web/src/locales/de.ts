@@ -113,6 +113,7 @@ const messages = {
     new: 'Neuer Upstream-Schlüssel',
     empty: 'Noch keine Upstream-Schlüssel',
     columns: {
+      order: 'Drag',
       name: 'Name',
       provider: 'Anbieter',
       baseUrl: 'Basis-URL',
@@ -126,6 +127,7 @@ const messages = {
       frozen: 'Eingefroren',
     },
     actions: {
+      drag: 'Drag to reorder defaults',
       freeze: 'Einfrieren',
       unfreeze: 'Freigeben',
     },
@@ -134,6 +136,7 @@ const messages = {
       unfreeze: 'Diesen Schlüssel freigeben?',
     },
     toast: {
+      orderSaved: 'Upstream key order saved',
       created: 'Upstream-Schlüssel erstellt',
       frozen: 'Eingefroren',
       unfrozen: 'Freigegeben',
@@ -181,13 +184,46 @@ const messages = {
       disabled: 'Deaktiviert',
     },
     actions: {
+      arrange: 'Arrange',
       delete: 'Löschen',
     },
     confirm: '{name} löschen?',
     toast: {
       created: 'Öffentliches Modell erstellt',
+      arrangementReset: 'Reset to upstream key default order',
+      arrangementSaved: 'Candidate arrangement saved',
       deleted: 'Gelöscht',
       createUpstreamKeyFirst: 'Erstellen Sie zuerst einen Upstream-Schlüssel',
+    },
+    arrange: {
+      title: 'Arrange {name}',
+      previewTitle: 'Actual attempt order preview',
+      previewHint:
+        'Unavailable candidates are skipped; endpoint health and sticky bindings can still move a usable candidate ahead at request time.',
+      emptyPreview: 'No enabled and available candidates in the current arrangement.',
+      emptyCandidates: 'No candidates yet',
+      moveUp: 'Up',
+      moveDown: 'Down',
+      reset: 'Reset default order',
+      resetConfirm: 'Reset candidates to the current upstream key order?',
+      dragHandle: 'Drag to reorder',
+      priority: 'Priority',
+      weight: 'Weight',
+      columns: {
+        order: 'Drag',
+        upstreamKey: 'Upstream key',
+        realModelName: 'Real model',
+        status: 'Status',
+        provider: 'Provider',
+      },
+      status: {
+        missing: 'Missing upstream',
+        upstreamDisabled: 'Upstream disabled',
+        frozen: 'Frozen',
+        degraded: 'Degraded',
+        healthy: 'Healthy',
+        ready: 'Ready',
+      },
     },
     drawer: {
       title: 'Neues öffentliches Modell',

@@ -113,6 +113,7 @@ const messages = {
     new: '新規アップストリームキー',
     empty: 'アップストリームキーがありません',
     columns: {
+      order: 'Drag',
       name: '名前',
       provider: 'プロバイダー',
       baseUrl: 'Base URL',
@@ -126,6 +127,7 @@ const messages = {
       frozen: '凍結中',
     },
     actions: {
+      drag: 'Drag to reorder defaults',
       freeze: '凍結',
       unfreeze: '凍結解除',
     },
@@ -134,6 +136,7 @@ const messages = {
       unfreeze: 'このキーの凍結を解除しますか？',
     },
     toast: {
+      orderSaved: 'Upstream key order saved',
       created: 'アップストリームキーを作成しました',
       frozen: '凍結しました',
       unfrozen: '凍結解除しました',
@@ -181,13 +184,46 @@ const messages = {
       disabled: '無効',
     },
     actions: {
+      arrange: 'Arrange',
       delete: '削除',
     },
     confirm: '{name} を削除しますか？',
     toast: {
       created: 'パブリックモデルを作成しました',
+      arrangementReset: 'Reset to upstream key default order',
+      arrangementSaved: 'Candidate arrangement saved',
       deleted: '削除しました',
       createUpstreamKeyFirst: '先にアップストリームキーを作成してください',
+    },
+    arrange: {
+      title: 'Arrange {name}',
+      previewTitle: 'Actual attempt order preview',
+      previewHint:
+        'Unavailable candidates are skipped; endpoint health and sticky bindings can still move a usable candidate ahead at request time.',
+      emptyPreview: 'No enabled and available candidates in the current arrangement.',
+      emptyCandidates: 'No candidates yet',
+      moveUp: 'Up',
+      moveDown: 'Down',
+      reset: 'Reset default order',
+      resetConfirm: 'Reset candidates to the current upstream key order?',
+      dragHandle: 'Drag to reorder',
+      priority: 'Priority',
+      weight: 'Weight',
+      columns: {
+        order: 'Drag',
+        upstreamKey: 'Upstream key',
+        realModelName: 'Real model',
+        status: 'Status',
+        provider: 'Provider',
+      },
+      status: {
+        missing: 'Missing upstream',
+        upstreamDisabled: 'Upstream disabled',
+        frozen: 'Frozen',
+        degraded: 'Degraded',
+        healthy: 'Healthy',
+        ready: 'Ready',
+      },
     },
     drawer: {
       title: '新規パブリックモデル',

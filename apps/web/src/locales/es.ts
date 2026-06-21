@@ -113,6 +113,7 @@ const messages = {
     new: 'Nueva clave de origen',
     empty: 'Aún no hay claves de origen',
     columns: {
+      order: 'Drag',
       name: 'Nombre',
       provider: 'Proveedor',
       baseUrl: 'URL base',
@@ -126,6 +127,7 @@ const messages = {
       frozen: 'Congelada',
     },
     actions: {
+      drag: 'Drag to reorder defaults',
       freeze: 'Congelar',
       unfreeze: 'Descongelar',
     },
@@ -134,6 +136,7 @@ const messages = {
       unfreeze: '¿Descongelar esta clave?',
     },
     toast: {
+      orderSaved: 'Upstream key order saved',
       created: 'Clave de origen creada',
       frozen: 'Congelada',
       unfrozen: 'Descongelada',
@@ -181,13 +184,46 @@ const messages = {
       disabled: 'Deshabilitado',
     },
     actions: {
+      arrange: 'Arrange',
       delete: 'Eliminar',
     },
     confirm: '¿Eliminar {name}?',
     toast: {
       created: 'Modelo público creado',
+      arrangementReset: 'Reset to upstream key default order',
+      arrangementSaved: 'Candidate arrangement saved',
       deleted: 'Eliminado',
       createUpstreamKeyFirst: 'Primero crea una clave de origen',
+    },
+    arrange: {
+      title: 'Arrange {name}',
+      previewTitle: 'Actual attempt order preview',
+      previewHint:
+        'Unavailable candidates are skipped; endpoint health and sticky bindings can still move a usable candidate ahead at request time.',
+      emptyPreview: 'No enabled and available candidates in the current arrangement.',
+      emptyCandidates: 'No candidates yet',
+      moveUp: 'Up',
+      moveDown: 'Down',
+      reset: 'Reset default order',
+      resetConfirm: 'Reset candidates to the current upstream key order?',
+      dragHandle: 'Drag to reorder',
+      priority: 'Priority',
+      weight: 'Weight',
+      columns: {
+        order: 'Drag',
+        upstreamKey: 'Upstream key',
+        realModelName: 'Real model',
+        status: 'Status',
+        provider: 'Provider',
+      },
+      status: {
+        missing: 'Missing upstream',
+        upstreamDisabled: 'Upstream disabled',
+        frozen: 'Frozen',
+        degraded: 'Degraded',
+        healthy: 'Healthy',
+        ready: 'Ready',
+      },
     },
     drawer: {
       title: 'Nuevo modelo público',

@@ -91,6 +91,9 @@ const extraParams = ref<KeyValueItem[]>([]);
 const fetchingModels = ref(false);
 const togglingIds = ref<Set<string>>(new Set());
 const endpointHealthRows = ref<UpstreamEndpointHealth[]>([]);
+const draggingIndex = ref<number | null>(null);
+const dragOverIndex = ref<number | null>(null);
+const dragOverPosition = ref<'before' | 'after'>('before');
 
 const pingOpen = ref(false);
 const pingKey = ref<UpstreamKey | null>(null);
@@ -876,7 +879,86 @@ async function handleFetchModels() {
   }
 }
 
+function clearOrderDragState() {
+  draggingIndex.value = null;
+  dragOverIndex.value = null;
+  dragOverPosition.value = 'before';
+}
+
+function reorderUpstreamKey(fromIndex: number, targetIndex: number, position: 'before' | 'after') {
+  if (fromIndex === targetIndex) return false;
+  const copy = [...items.value];
+  const [moved] = copy.splice(fromIndex, 1);
+  if (!moved) return false;
+  let insertIndex = targetIndex + (position === 'after' ? 1 : 0);
+  if (fromIndex < insertIndex) insertIndex -= 1;
+  insertIndex = Math.max(0, Math.min(copy.length, insertIndex));
+  copy.splice(insertIndex, 0, moved);
+  items.value = copy;
+  return true;
+}
+
+async function saveUpstreamOrder(previous: UpstreamKey[]) {
+  try {
+    await upstreamKeysApi.setOrder(items.value.map((item) => item.id));
+    message.success(t('upstreamKeys.toast.orderSaved'));
+  } catch (err) {
+    items.value = previous;
+    message.error((err as Error).message);
+  }
+}
+
+function upstreamRowProps(_row: UpstreamKey, idx: number) {
+  const classes: string[] = [];
+  if (draggingIndex.value === idx) classes.push('upstream-dragging');
+  if (dragOverIndex.value === idx) classes.push(`upstream-drop-${dragOverPosition.value}`);
+  return {
+    class: classes.join(' '),
+    onDragover: (event: DragEvent) => {
+      if (draggingIndex.value === null) return;
+      event.preventDefault();
+      const target = event.currentTarget as HTMLElement;
+      const rect = target.getBoundingClientRect();
+      dragOverIndex.value = idx;
+      dragOverPosition.value = event.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+    },
+    onDrop: async (event: DragEvent) => {
+      event.preventDefault();
+      const previous = [...items.value];
+      const changed =
+        draggingIndex.value !== null &&
+        reorderUpstreamKey(draggingIndex.value, idx, dragOverPosition.value);
+      clearOrderDragState();
+      if (changed) await saveUpstreamOrder(previous);
+    },
+    onDragend: clearOrderDragState,
+  };
+}
+
 const columns = computed<DataTableColumns<UpstreamKey>>(() => [
+  {
+    title: t('upstreamKeys.columns.order'),
+    key: 'order',
+    align: 'center',
+    width: 64,
+    render: (_row, idx) =>
+      h(
+        'div',
+        {
+          class: 'order-handle',
+          draggable: true,
+          title: t('upstreamKeys.actions.drag'),
+          'data-testid': 'upstream-order-handle',
+          onDragstart: (event: DragEvent) => {
+            draggingIndex.value = idx;
+            event.dataTransfer?.setData('text/plain', String(idx));
+            if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+          },
+          onDragend: clearOrderDragState,
+        },
+        [h('span', { class: 'order-grip', 'aria-hidden': 'true' })],
+      ),
+  },
   { title: t('upstreamKeys.columns.name'), key: 'name', fixed: 'left', width: 200 },
   {
     title: t('upstreamKeys.columns.provider'),
@@ -889,7 +971,6 @@ const columns = computed<DataTableColumns<UpstreamKey>>(() => [
       return h(NTag, { type: 'info', size: 'small' }, () => `${icon ? `${icon} ` : ''}${label}`);
     },
   },
-  { title: t('upstreamKeys.columns.baseUrl'), key: 'baseUrl', ellipsis: { tooltip: true } },
   {
     title: t('upstreamKeys.columns.models'),
     key: 'candidateCount',
@@ -916,31 +997,9 @@ const columns = computed<DataTableColumns<UpstreamKey>>(() => [
       ),
   },
   {
-    title: t('upstreamKeys.columns.health'),
-    key: 'health',
-    width: 150,
-    render: (row) => {
-      const summary = summarizeKeyHealth(row.id);
-      if (summary.checked === 0) {
-        return h(NText, { depth: 3, size: 'small' }, () => '—');
-      }
-      if (summary.degraded > 0) {
-        return h(NTag, { type: 'error', size: 'small' }, () =>
-          t('upstreamKeys.health.degradedCount', { count: summary.degraded, total: summary.total }),
-        );
-      }
-      const ms = summary.bestDelayMs ?? 0;
-      const label =
-        summary.total > 1
-          ? t('upstreamKeys.health.bestLatency', { ms, total: summary.total })
-          : t('upstreamKeys.health.latencyMs', { ms });
-      return h(NTag, { type: latencyTagType(ms), size: 'small' }, () => label);
-    },
-  },
-  {
     title: t('upstreamKeys.columns.actions'),
     key: 'actions',
-    width: 340,
+    width: 320,
     render: (row) =>
       h(NSpace, { size: 'small', align: 'center' }, () => [
         h(NButton, { size: 'small', onClick: () => openPing(row) }, () =>
@@ -986,6 +1045,7 @@ const columns = computed<DataTableColumns<UpstreamKey>>(() => [
         :bordered="false"
         :single-line="false"
         :row-key="(row) => row.id"
+        :row-props="upstreamRowProps"
         :empty="h(NEmpty, { description: t('upstreamKeys.empty') })"
       />
     </NCard>
@@ -1433,5 +1493,51 @@ const columns = computed<DataTableColumns<UpstreamKey>>(() => [
 .page {
   max-width: 1200px;
   margin: 0 auto;
+}
+
+.order-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #667085;
+  cursor: grab;
+  user-select: none;
+}
+
+.order-handle:hover {
+  border-color: #d0d5dd;
+  background: #f8fafc;
+  color: #344054;
+}
+
+.order-handle:active {
+  cursor: grabbing;
+  background: #eef4ff;
+  border-color: #84adff;
+}
+
+.order-grip {
+  display: block;
+  width: 14px;
+  height: 20px;
+  background-image: radial-gradient(currentColor 1.4px, transparent 1.6px);
+  background-size: 7px 7px;
+  background-position: 0 1px;
+}
+
+:deep(.upstream-dragging td) {
+  opacity: 0.55;
+}
+
+:deep(.upstream-drop-before td) {
+  box-shadow: inset 0 2px 0 #2f7cf6;
+}
+
+:deep(.upstream-drop-after td) {
+  box-shadow: inset 0 -2px 0 #2f7cf6;
 }
 </style>

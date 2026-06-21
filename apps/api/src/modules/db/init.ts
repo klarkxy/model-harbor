@@ -102,6 +102,7 @@ const STATEMENTS: readonly string[] = [
      supported_models_json TEXT NOT NULL DEFAULT '[]',
      endpoints_json TEXT,
      provider_preset_id TEXT,
+     display_order INTEGER NOT NULL DEFAULT 1000,
      enabled INTEGER NOT NULL DEFAULT 1,
      frozen INTEGER NOT NULL DEFAULT 0,
      frozen_reason TEXT,
@@ -124,6 +125,7 @@ const STATEMENTS: readonly string[] = [
   `ALTER TABLE upstream_keys ADD COLUMN auth_type TEXT NOT NULL DEFAULT 'pat'`,
   `ALTER TABLE upstream_keys ADD COLUMN auth_config_ciphertext TEXT`,
   `ALTER TABLE upstream_keys ADD COLUMN sticky_session_ttl_ms INTEGER NOT NULL DEFAULT 300000`,
+  `ALTER TABLE upstream_keys ADD COLUMN display_order INTEGER NOT NULL DEFAULT 1000`,
 
   // OAuth PKCE authorization sessions (short-lived, one-time use).
   `CREATE TABLE IF NOT EXISTS oauth_sessions (
@@ -174,9 +176,11 @@ const STATEMENTS: readonly string[] = [
      display_name TEXT,
      description TEXT,
      enabled INTEGER NOT NULL DEFAULT 1,
+     candidate_order_customized INTEGER NOT NULL DEFAULT 0,
      created_at INTEGER NOT NULL,
      updated_at INTEGER NOT NULL
    )`,
+  `ALTER TABLE public_models ADD COLUMN candidate_order_customized INTEGER NOT NULL DEFAULT 0`,
   `CREATE TABLE IF NOT EXISTS public_model_candidates (
      id TEXT PRIMARY KEY,
      public_model_id TEXT NOT NULL,

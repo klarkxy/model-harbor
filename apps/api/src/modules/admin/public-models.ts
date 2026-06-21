@@ -28,6 +28,7 @@ import {
 } from './helpers.js';
 import { auditMetaFromRequest } from './upstream-keys.js';
 import { recordAuditEvent } from '../observability/index.js';
+import { resetPublicModelCandidateOrder } from './upstream-onboarding.js';
 
 export interface PublicModelRouteDeps {
   db: Db;
@@ -102,6 +103,7 @@ function presentPublicModel(row: PublicModelRow, candidateCount: number) {
     displayName: row.displayName,
     description: row.description,
     enabled: row.enabled,
+    candidateOrderCustomized: row.candidateOrderCustomized,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     candidateCount,
@@ -371,6 +373,10 @@ export function registerPublicModelRoutes(app: FastifyInstance, deps: PublicMode
         return normalized;
       },
     });
+    await db
+      .update(publicModels)
+      .set({ candidateOrderCustomized: true, updatedAt: new Date() })
+      .where(eq(publicModels.id, id));
     await recordAuditEvent(db, {
       ...auditMetaFromRequest(req),
       action: 'public_model.update',
@@ -379,6 +385,31 @@ export function registerPublicModelRoutes(app: FastifyInstance, deps: PublicMode
       details: { candidatesCount: normalized.length },
     });
     const candidates = await loadCandidates(db, id);
+    return { candidates };
+  });
+
+  app.post('/api/admin/public-models/:id/candidates/reset-order', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const existing = await findPublicModelById(db, id);
+    if (!existing) {
+      reply.code(404).send({
+        error: {
+          message: 'public model not found',
+          type: 'target_not_found',
+          code: 'target_not_found',
+        },
+      });
+      return;
+    }
+    await resetPublicModelCandidateOrder(db, id, false);
+    const candidates = await loadCandidates(db, id);
+    await recordAuditEvent(db, {
+      ...auditMetaFromRequest(req),
+      action: 'public_model.update',
+      resourceType: 'public_model',
+      resourceId: id,
+      details: { resetCandidateOrder: true },
+    });
     return { candidates };
   });
 

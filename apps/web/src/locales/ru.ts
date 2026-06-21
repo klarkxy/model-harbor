@@ -113,6 +113,7 @@ const messages = {
     new: 'Новый upstream-ключ',
     empty: 'Upstream-ключей пока нет',
     columns: {
+      order: 'Drag',
       name: 'Имя',
       provider: 'Провайдер',
       baseUrl: 'Базовый URL',
@@ -126,6 +127,7 @@ const messages = {
       frozen: 'Заморожен',
     },
     actions: {
+      drag: 'Drag to reorder defaults',
       freeze: 'Заморозить',
       unfreeze: 'Разморозить',
     },
@@ -134,6 +136,7 @@ const messages = {
       unfreeze: 'Разморозить этот ключ?',
     },
     toast: {
+      orderSaved: 'Upstream key order saved',
       created: 'Upstream-ключ создан',
       frozen: 'Заморожен',
       unfrozen: 'Разморожен',
@@ -181,13 +184,46 @@ const messages = {
       disabled: 'Отключена',
     },
     actions: {
+      arrange: 'Arrange',
       delete: 'Удалить',
     },
     confirm: 'Удалить {name}?',
     toast: {
       created: 'Публичная модель создана',
+      arrangementReset: 'Reset to upstream key default order',
+      arrangementSaved: 'Candidate arrangement saved',
       deleted: 'Удалено',
       createUpstreamKeyFirst: 'Сначала создайте upstream-ключ',
+    },
+    arrange: {
+      title: 'Arrange {name}',
+      previewTitle: 'Actual attempt order preview',
+      previewHint:
+        'Unavailable candidates are skipped; endpoint health and sticky bindings can still move a usable candidate ahead at request time.',
+      emptyPreview: 'No enabled and available candidates in the current arrangement.',
+      emptyCandidates: 'No candidates yet',
+      moveUp: 'Up',
+      moveDown: 'Down',
+      reset: 'Reset default order',
+      resetConfirm: 'Reset candidates to the current upstream key order?',
+      dragHandle: 'Drag to reorder',
+      priority: 'Priority',
+      weight: 'Weight',
+      columns: {
+        order: 'Drag',
+        upstreamKey: 'Upstream key',
+        realModelName: 'Real model',
+        status: 'Status',
+        provider: 'Provider',
+      },
+      status: {
+        missing: 'Missing upstream',
+        upstreamDisabled: 'Upstream disabled',
+        frozen: 'Frozen',
+        degraded: 'Degraded',
+        healthy: 'Healthy',
+        ready: 'Ready',
+      },
     },
     drawer: {
       title: 'Новая публичная модель',

@@ -156,6 +156,7 @@ export const upstreamKeys = sqliteTable('upstream_keys', {
   supportedModelsJson: text('supported_models_json').notNull().default('[]'),
   endpointsJson: text('endpoints_json'),
   providerPresetId: text('provider_preset_id'),
+  displayOrder: integer('display_order').notNull().default(1000),
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
   frozen: integer('frozen', { mode: 'boolean' }).notNull().default(false),
   frozenReason: text('frozen_reason'),
@@ -304,6 +305,9 @@ export const publicModels = sqliteTable('public_models', {
   displayName: text('display_name'),
   description: text('description'),
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  candidateOrderCustomized: integer('candidate_order_customized', { mode: 'boolean' })
+    .notNull()
+    .default(false),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });

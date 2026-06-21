@@ -1,8 +1,9 @@
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import { generateId, type ProviderType, type SourceProtocol } from '@modelharbor/shared';
 import type { Db } from '../db/index.js';
 import { publicModelCandidates, publicModels } from '../db/tables/models.js';
 import { targetNames } from '../db/tables/routing.js';
+import { upstreamKeys } from '../db/tables/upstream.js';
 import { getModelMappings, type ProviderPreset } from '../providers/presets.js';
 
 export interface OnboardingResult {
@@ -34,6 +35,58 @@ function candidateEndpointFields(mapping: {
     endpointBaseUrl: mapping.endpointBaseUrl,
     endpointApiPath: mapping.endpointApiPath,
   };
+}
+
+async function nextCandidatePriority(
+  tx: Db,
+  publicModelId: string,
+  upstreamKeyId: string,
+): Promise<number> {
+  const publicModel = await tx
+    .select({ candidateOrderCustomized: publicModels.candidateOrderCustomized })
+    .from(publicModels)
+    .where(eq(publicModels.id, publicModelId))
+    .get();
+  if (publicModel?.candidateOrderCustomized) {
+    const maxRow = await tx
+      .select({ maxPriority: sql<number>`max(${publicModelCandidates.priority})` })
+      .from(publicModelCandidates)
+      .where(eq(publicModelCandidates.publicModelId, publicModelId))
+      .get();
+    return (maxRow?.maxPriority ?? 0) + 10;
+  }
+  const upstream = await tx
+    .select({ displayOrder: upstreamKeys.displayOrder })
+    .from(upstreamKeys)
+    .where(eq(upstreamKeys.id, upstreamKeyId))
+    .get();
+  return upstream?.displayOrder ?? 1000;
+}
+
+export async function resetPublicModelCandidateOrder(
+  db: Db,
+  publicModelId: string,
+  customized: boolean,
+): Promise<void> {
+  const rows = await db
+    .select({ c: publicModelCandidates, u: upstreamKeys })
+    .from(publicModelCandidates)
+    .innerJoin(upstreamKeys, eq(publicModelCandidates.upstreamKeyId, upstreamKeys.id))
+    .where(eq(publicModelCandidates.publicModelId, publicModelId))
+    .orderBy(asc(upstreamKeys.displayOrder), asc(publicModelCandidates.createdAt))
+    .all();
+  await db.transaction(async (tx) => {
+    for (let idx = 0; idx < rows.length; idx += 1) {
+      await tx
+        .update(publicModelCandidates)
+        .set({ priority: (idx + 1) * 10, updatedAt: new Date() })
+        .where(eq(publicModelCandidates.id, rows[idx]!.c.id));
+    }
+    await tx
+      .update(publicModels)
+      .set({ candidateOrderCustomized: customized, updatedAt: new Date() })
+      .where(eq(publicModels.id, publicModelId));
+  });
 }
 
 // Create or reuse public models, candidates, and a model group for a newly
@@ -105,6 +158,7 @@ export async function onboardUpstreamKeyWithMappings(
         )
         .get();
       if (!existingCandidate) {
+        const priority = await nextCandidatePriority(tx as unknown as Db, pmId, upstreamKeyId);
         await tx.insert(publicModelCandidates).values({
           id: generateId('publicModel') + '_c',
           publicModelId: pmId,
@@ -112,7 +166,7 @@ export async function onboardUpstreamKeyWithMappings(
           realModelName: mapping.realName,
           ...candidateEndpointFields(mapping),
           enabled: true,
-          priority: 100,
+          priority,
           weight: 1,
           createdAt: now,
           updatedAt: now,
@@ -286,6 +340,7 @@ export async function syncUpstreamKeyMappings(
         .get();
       if (!pm) continue; // Should not happen since we created above.
       const id = generateId('publicModel') + '_c';
+      const priority = await nextCandidatePriority(tx as unknown as Db, pm.id, upstreamKeyId);
       await tx.insert(publicModelCandidates).values({
         id,
         publicModelId: pm.id,
@@ -293,7 +348,7 @@ export async function syncUpstreamKeyMappings(
         realModelName: mapping.realName,
         ...candidateEndpointFields(mapping),
         enabled: mapping.enabled,
-        priority: 100,
+        priority,
         weight: 1,
         createdAt: now,
         updatedAt: now,
@@ -304,7 +359,7 @@ export async function syncUpstreamKeyMappings(
         publicName: mapping.publicName,
         realName: mapping.realName,
         enabled: mapping.enabled,
-        priority: 100,
+        priority,
         weight: 1,
         endpointProtocol: mapping.endpointProtocol ?? null,
         endpointProviderType: mapping.endpointProviderType ?? null,

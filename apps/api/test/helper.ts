@@ -4,18 +4,20 @@ import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { buildServer } from '../src/server.js';
 import {
+  createDb,
+  initSchema,
+  type Db,
+} from '../src/modules/db/index.js';
+import {
   apps,
   consumerKeyAccess,
   consumerKeys,
-  createDb,
-  initSchema,
   modelGroupMembers,
   modelGroups,
   publicModels,
   targetNames,
-  type Db,
   upstreamKeys,
-} from '../src/modules/db/index.js';
+} from '../src/modules/db/schema.js';
 import { bootstrapAdmin, SESSION_COOKIE } from '../src/modules/auth/index.js';
 import { encryptUpstreamApiKey, generateConsumerKeyRaw } from '../src/modules/admin/index.js';
 import { generateId } from '@modelharbor/shared';

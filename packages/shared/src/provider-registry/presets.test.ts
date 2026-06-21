@@ -81,4 +81,16 @@ describe('provider registry presets', () => {
     expect(opencodeGoEndpointProtocolForModel('qwen3.7-plus')).toBe('anthropic');
     expect(opencodeGoEndpointProtocolForModel('future-model')).toBeNull();
   });
+
+  it('sets default User-Agent headers for Coding and OpenCode Go presets only', () => {
+    for (const id of ['kimi-code', 'opencode-go']) {
+      expect(getProviderDescriptor(id)?.defaultExtraHeaders?.['User-Agent'], id).toBe(
+        'ModelHarbor/0.1',
+      );
+    }
+    expect(
+      getProviderDescriptor('moonshot-cn')?.defaultExtraHeaders?.['User-Agent'],
+    ).toBeUndefined();
+    expect(getProviderDescriptor('moonshot')?.defaultExtraHeaders?.['User-Agent']).toBeUndefined();
+  });
 });

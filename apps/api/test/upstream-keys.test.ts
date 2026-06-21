@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { eq, and } from 'drizzle-orm';
+import { asc, eq, and } from 'drizzle-orm';
 import { publicModelCandidates, publicModels } from '../src/modules/db/tables/models.js';
 import { upstreamKeys } from '../src/modules/db/tables/upstream.js';
 import { decryptUpstreamApiKeyForTest } from '../src/modules/admin/index.js';
@@ -351,6 +351,142 @@ describe('upstream keys admin', () => {
     });
   });
 
+  it('uses upstream key order as the default public model candidate order', async () => {
+    const first = await rig.app.inject({
+      method: 'POST',
+      url: '/api/admin/upstream-keys',
+      headers: { cookie: rig.cookie },
+      payload: {
+        name: 'default-order-a',
+        apiKey: 'sk-a',
+        providerPresetId: 'openai',
+        modelMappings: [{ realName: 'shared-a', publicName: 'shared-public', enabled: true }],
+      },
+    });
+    const second = await rig.app.inject({
+      method: 'POST',
+      url: '/api/admin/upstream-keys',
+      headers: { cookie: rig.cookie },
+      payload: {
+        name: 'default-order-b',
+        apiKey: 'sk-b',
+        providerPresetId: 'openai',
+        modelMappings: [{ realName: 'shared-b', publicName: 'shared-public', enabled: true }],
+      },
+    });
+    expect(first.statusCode).toBe(200);
+    expect(second.statusCode).toBe(200);
+    const firstBody = first.json() as { id: string };
+    const secondBody = second.json() as { id: string };
+
+    const reorder = await rig.app.inject({
+      method: 'PUT',
+      url: '/api/admin/upstream-keys/order',
+      headers: { cookie: rig.cookie },
+      payload: { ids: [secondBody.id, firstBody.id] },
+    });
+    expect(reorder.statusCode).toBe(200);
+
+    const publicModel = await rig.db
+      .select()
+      .from(publicModels)
+      .where(eq(publicModels.name, 'shared-public'))
+      .get();
+    expect(publicModel).toBeTruthy();
+    const rows = await rig.db
+      .select({ c: publicModelCandidates, u: upstreamKeys })
+      .from(publicModelCandidates)
+      .innerJoin(upstreamKeys, eq(publicModelCandidates.upstreamKeyId, upstreamKeys.id))
+      .where(eq(publicModelCandidates.publicModelId, publicModel!.id))
+      .orderBy(asc(publicModelCandidates.priority))
+      .all();
+    expect(rows.map(({ u }) => u.id)).toEqual([secondBody.id, firstBody.id]);
+    expect(rows.map(({ c }) => c.priority)).toEqual([10, 20]);
+  });
+
+  it('appends new candidates after a public model has been manually arranged', async () => {
+    const first = await rig.app.inject({
+      method: 'POST',
+      url: '/api/admin/upstream-keys',
+      headers: { cookie: rig.cookie },
+      payload: {
+        name: 'custom-order-a',
+        apiKey: 'sk-a',
+        providerPresetId: 'openai',
+        modelMappings: [{ realName: 'shared-a', publicName: 'shared-custom', enabled: true }],
+      },
+    });
+    const second = await rig.app.inject({
+      method: 'POST',
+      url: '/api/admin/upstream-keys',
+      headers: { cookie: rig.cookie },
+      payload: {
+        name: 'custom-order-b',
+        apiKey: 'sk-b',
+        providerPresetId: 'openai',
+        modelMappings: [{ realName: 'shared-b', publicName: 'shared-custom', enabled: true }],
+      },
+    });
+    const firstBody = first.json() as { id: string };
+    const secondBody = second.json() as { id: string };
+    const publicModel = await rig.db
+      .select()
+      .from(publicModels)
+      .where(eq(publicModels.name, 'shared-custom'))
+      .get();
+    expect(publicModel).toBeTruthy();
+
+    const customArrange = await rig.app.inject({
+      method: 'PUT',
+      url: `/api/admin/public-models/${publicModel!.id}/candidates`,
+      headers: { cookie: rig.cookie },
+      payload: {
+        candidates: [
+          { upstreamKeyId: secondBody.id, realModelName: 'shared-b', priority: 10, weight: 1 },
+          { upstreamKeyId: firstBody.id, realModelName: 'shared-a', priority: 20, weight: 1 },
+        ],
+      },
+    });
+    expect(customArrange.statusCode).toBe(200);
+
+    const third = await rig.app.inject({
+      method: 'POST',
+      url: '/api/admin/upstream-keys',
+      headers: { cookie: rig.cookie },
+      payload: {
+        name: 'custom-order-c',
+        apiKey: 'sk-c',
+        providerPresetId: 'openai',
+        modelMappings: [{ realName: 'shared-c', publicName: 'shared-custom', enabled: true }],
+      },
+    });
+    expect(third.statusCode).toBe(200);
+
+    const rows = await rig.db
+      .select()
+      .from(publicModelCandidates)
+      .where(eq(publicModelCandidates.publicModelId, publicModel!.id))
+      .orderBy(asc(publicModelCandidates.priority))
+      .all();
+    expect(rows.map((row) => row.realModelName)).toEqual(['shared-b', 'shared-a', 'shared-c']);
+    expect(rows.map((row) => row.priority)).toEqual([10, 20, 30]);
+
+    const reset = await rig.app.inject({
+      method: 'POST',
+      url: `/api/admin/public-models/${publicModel!.id}/candidates/reset-order`,
+      headers: { cookie: rig.cookie },
+    });
+    expect(reset.statusCode).toBe(200);
+    const resetRows = await rig.db
+      .select({ c: publicModelCandidates, u: upstreamKeys })
+      .from(publicModelCandidates)
+      .innerJoin(upstreamKeys, eq(publicModelCandidates.upstreamKeyId, upstreamKeys.id))
+      .where(eq(publicModelCandidates.publicModelId, publicModel!.id))
+      .orderBy(asc(publicModelCandidates.priority))
+      .all();
+    expect(resetRows.map(({ u }) => u.id)).toEqual([firstBody.id, secondBody.id, (third.json() as { id: string }).id]);
+  });
+
   it('duplicates a PAT upstream key as failover and copies candidate endpoint overrides', async () => {
     const create = await rig.app.inject({
       method: 'POST',
@@ -433,7 +569,7 @@ describe('upstream keys admin', () => {
     expect(candidates).toHaveLength(1);
     expect(candidates[0]).toMatchObject({
       realModelName: 'qwen3.7-plus',
-      priority: 110,
+      priority: 20,
       weight: 1,
       endpointProtocol: 'anthropic',
       endpointProviderType: 'anthropic_compatible',

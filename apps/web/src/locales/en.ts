@@ -157,6 +157,7 @@ const messages = {
     new: 'New upstream key',
     empty: 'No upstream keys yet',
     columns: {
+      order: 'Drag',
       name: 'Name',
       provider: 'Provider',
       baseUrl: 'Base URL',
@@ -179,6 +180,7 @@ const messages = {
       test: 'Test',
       health: 'Health',
       duplicate: 'Duplicate',
+      drag: 'Drag to reorder defaults',
     },
     confirm: {
       freeze: 'Freeze this key?',
@@ -192,6 +194,7 @@ const messages = {
       frozen: 'Frozen',
       unfrozen: 'Unfrozen',
       deleted: 'Upstream key deleted',
+      orderSaved: 'Upstream key order saved',
     },
     drawer: {
       title: 'New upstream key',
@@ -347,13 +350,46 @@ const messages = {
       disabled: 'Disabled',
     },
     actions: {
+      arrange: 'Arrange',
       delete: 'Delete',
     },
     confirm: 'Delete {name}?',
     toast: {
       created: 'Public model created',
+      arrangementSaved: 'Candidate arrangement saved',
+      arrangementReset: 'Reset to upstream key default order',
       deleted: 'Deleted',
       createUpstreamKeyFirst: 'Create an upstream key first',
+    },
+    arrange: {
+      title: 'Arrange {name}',
+      previewTitle: 'Actual attempt order preview',
+      previewHint:
+        'Unavailable candidates are skipped; endpoint health and sticky bindings can still move a usable candidate ahead at request time.',
+      emptyPreview: 'No enabled and available candidates in the current arrangement.',
+      emptyCandidates: 'No candidates yet',
+      moveUp: 'Up',
+      moveDown: 'Down',
+      dragHandle: 'Drag to reorder',
+      reset: 'Reset default order',
+      resetConfirm: 'Reset candidates to the current upstream key order?',
+      priority: 'Priority',
+      weight: 'Weight',
+      columns: {
+        order: 'Drag',
+        upstreamKey: 'Upstream key',
+        realModelName: 'Real model',
+        status: 'Status',
+        provider: 'Provider',
+      },
+      status: {
+        missing: 'Missing upstream',
+        upstreamDisabled: 'Upstream disabled',
+        frozen: 'Frozen',
+        degraded: 'Degraded',
+        healthy: 'Healthy',
+        ready: 'Ready',
+      },
     },
     drawer: {
       title: 'New public model',

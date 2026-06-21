@@ -158,6 +158,7 @@ const messages: Messages = {
     new: '新建上游密钥',
     empty: '暂无上链密钥',
     columns: {
+      order: '拖动',
       name: '名称',
       provider: '提供商',
       baseUrl: '基础 URL',
@@ -180,6 +181,7 @@ const messages: Messages = {
       test: '测试',
       health: '健康',
       duplicate: '复制',
+      drag: '拖动调整默认顺序',
     },
     confirm: {
       freeze: '冻结此密钥？',
@@ -193,6 +195,7 @@ const messages: Messages = {
       frozen: '已冻结',
       unfrozen: '已解冻',
       deleted: '上游密钥已删除',
+      orderSaved: '上游密钥顺序已保存',
     },
     drawer: {
       title: '新建上游密钥',
@@ -346,13 +349,46 @@ const messages: Messages = {
       disabled: '已禁用',
     },
     actions: {
+      arrange: '编排',
       delete: '删除',
     },
     confirm: '删除 {name}？',
     toast: {
       created: '公共模型已创建',
+      arrangementSaved: '候选编排已保存',
+      arrangementReset: '已重设为上游密钥默认顺序',
       deleted: '已删除',
       createUpstreamKeyFirst: '请先创建一个上游密钥',
+    },
+    arrange: {
+      title: '编排 {name}',
+      previewTitle: '实际尝试顺序预览',
+      previewHint:
+        '不可用候选会被跳过；请求时端点健康状态和 Sticky 绑定仍可能把可用候选提前。',
+      emptyPreview: '当前编排中没有已启用且可用的候选。',
+      emptyCandidates: '暂无候选',
+      moveUp: '上移',
+      moveDown: '下移',
+      dragHandle: '拖动调整顺序',
+      reset: '重设默认顺序',
+      resetConfirm: '按当前上游密钥顺序重设候选编排？',
+      priority: '优先级',
+      weight: '权重',
+      columns: {
+        order: '拖动',
+        upstreamKey: '上游密钥',
+        realModelName: '真实模型',
+        status: '状态',
+        provider: '提供商',
+      },
+      status: {
+        missing: '上游缺失',
+        upstreamDisabled: '上游已禁用',
+        frozen: '已冻结',
+        degraded: '性能降级',
+        healthy: '健康',
+        ready: '可用',
+      },
     },
     drawer: {
       title: '新建公共模型',

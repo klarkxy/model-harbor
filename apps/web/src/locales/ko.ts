@@ -113,6 +113,7 @@ const messages = {
     new: '새 업스트림 키',
     empty: '업스트림 키 없음',
     columns: {
+      order: 'Drag',
       name: '이름',
       provider: '제공자',
       baseUrl: 'Base URL',
@@ -126,6 +127,7 @@ const messages = {
       frozen: '동결됨',
     },
     actions: {
+      drag: 'Drag to reorder defaults',
       freeze: '동결',
       unfreeze: '동결 해제',
     },
@@ -134,6 +136,7 @@ const messages = {
       unfreeze: '이 키의 동결을 해제하시겠습니까?',
     },
     toast: {
+      orderSaved: 'Upstream key order saved',
       created: '업스트림 키가 생성되었습니다',
       frozen: '동결되었습니다',
       unfrozen: '동결 해제되었습니다',
@@ -181,13 +184,46 @@ const messages = {
       disabled: '비활성',
     },
     actions: {
+      arrange: 'Arrange',
       delete: '삭제',
     },
     confirm: '{name}을(를) 삭제하시겠습니까?',
     toast: {
       created: '공개 모델이 생성되었습니다',
+      arrangementReset: 'Reset to upstream key default order',
+      arrangementSaved: 'Candidate arrangement saved',
       deleted: '삭제되었습니다',
       createUpstreamKeyFirst: '먼저 업스트림 키를 생성하세요',
+    },
+    arrange: {
+      title: 'Arrange {name}',
+      previewTitle: 'Actual attempt order preview',
+      previewHint:
+        'Unavailable candidates are skipped; endpoint health and sticky bindings can still move a usable candidate ahead at request time.',
+      emptyPreview: 'No enabled and available candidates in the current arrangement.',
+      emptyCandidates: 'No candidates yet',
+      moveUp: 'Up',
+      moveDown: 'Down',
+      reset: 'Reset default order',
+      resetConfirm: 'Reset candidates to the current upstream key order?',
+      dragHandle: 'Drag to reorder',
+      priority: 'Priority',
+      weight: 'Weight',
+      columns: {
+        order: 'Drag',
+        upstreamKey: 'Upstream key',
+        realModelName: 'Real model',
+        status: 'Status',
+        provider: 'Provider',
+      },
+      status: {
+        missing: 'Missing upstream',
+        upstreamDisabled: 'Upstream disabled',
+        frozen: 'Frozen',
+        degraded: 'Degraded',
+        healthy: 'Healthy',
+        ready: 'Ready',
+      },
     },
     drawer: {
       title: '새 공개 모델',
