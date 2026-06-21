@@ -612,6 +612,20 @@ const arrangedColumns = computed<DataTableColumns<CandidateDraft>>(() => [
   flex: 1 1 190px;
 }
 
+:deep(.candidate-dragging td) {
+  opacity: 0.55;
+}
+
+:deep(.candidate-drop-before td) {
+  box-shadow: inset 0 2px 0 #2f7cf6;
+}
+
+:deep(.candidate-drop-after td) {
+  box-shadow: inset 0 -2px 0 #2f7cf6;
+}
+</style>
+
+<style>
 .order-handle {
   display: inline-flex;
   align-items: center;
@@ -644,17 +658,5 @@ const arrangedColumns = computed<DataTableColumns<CandidateDraft>>(() => [
   background-image: radial-gradient(currentColor 1.4px, transparent 1.6px);
   background-size: 7px 7px;
   background-position: 0 1px;
-}
-
-:deep(.candidate-dragging td) {
-  opacity: 0.55;
-}
-
-:deep(.candidate-drop-before td) {
-  box-shadow: inset 0 2px 0 #2f7cf6;
-}
-
-:deep(.candidate-drop-after td) {
-  box-shadow: inset 0 -2px 0 #2f7cf6;
 }
 </style>
