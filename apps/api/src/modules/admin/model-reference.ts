@@ -375,6 +375,9 @@ function entryId(): string {
 
 function isLikelyModelName(line: string): boolean {
   if (line.length < 2 || line.length > 120) return false;
+  if (/^(Image:|详情|查看详情|完整排名|来源：|数据更新于|数据来源：|排名|模型|分数|Elo)/i.test(line)) {
+    return false;
+  }
   if (/^(HLE|ARC-AGI-2|FrontierMath|SWE-bench|τ²-Bench|闭源|免费商用|不可商用|开源情况)/.test(line)) {
     return false;
   }

@@ -484,9 +484,13 @@ const messages: Messages = {
     title: '模型参考',
     region: '区域',
     refresh: '刷新',
+    reset: '重置',
     refreshed: '参考数据已刷新',
     empty: '暂无参考数据',
     sync: '同步状态',
+    allMetrics: '全部维度',
+    searchPlaceholder: '搜索模型或供应商',
+    resultCount: '{count} 条',
     columns: {
       model: '模型',
       provider: '供应商',

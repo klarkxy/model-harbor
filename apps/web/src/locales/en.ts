@@ -485,9 +485,13 @@ const messages = {
     title: 'Model Reference',
     region: 'Region',
     refresh: 'Refresh',
+    reset: 'Reset',
     refreshed: 'Reference data refreshed',
     empty: 'No reference rows',
     sync: 'Sync status',
+    allMetrics: 'All metrics',
+    searchPlaceholder: 'Search model or provider',
+    resultCount: '{count} rows',
     columns: {
       model: 'Model',
       provider: 'Provider',

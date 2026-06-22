@@ -6,6 +6,8 @@ import {
   NCard,
   NDataTable,
   NEmpty,
+  NInput,
+  NSelect,
   NSpace,
   NTag,
   NText,
@@ -30,6 +32,8 @@ const sync = ref<ModelReferenceSyncStatus[]>([]);
 const sortState = ref<SortState>(null);
 const page = ref(1);
 const pageSize = ref(20);
+const query = ref('');
+const selectedMetric = ref('all');
 
 const preferredScoreKeys = [
   'intelligence',
@@ -53,23 +57,9 @@ function scoreValue(entry: ModelReferenceEntry, key: string): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-function priceValue(entry: ModelReferenceEntry): number | null {
-  const price = entry.price;
-  const blended = price.blendedUsdPerMTok ?? price.blendedCnyPerMTok;
-  if (typeof blended === 'number' && Number.isFinite(blended)) return blended;
-  const input = price.inputUsdPerMTok ?? price.inputCnyPerMTok;
-  const output = price.outputUsdPerMTok ?? price.outputCnyPerMTok;
-  if (typeof input === 'number' && typeof output === 'number') return (input + output) / 2;
-  if (typeof input === 'number') return input;
-  if (typeof output === 'number') return output;
-  return null;
-}
-
 function sortValue(entry: ModelReferenceEntry, key: string | number): string | number | null {
   if (key === 'displayName') return entry.displayName || entry.normalizedModelName || null;
   if (key === 'provider') return entry.provider || null;
-  if (key === 'price') return priceValue(entry);
-  if (key === 'contextWindow') return entry.contextWindow;
   if (typeof key === 'string') return scoreValue(entry, key);
   return null;
 }
@@ -89,30 +79,6 @@ function compareSortValue(
     return (left - right) * direction;
   }
   return String(left).localeCompare(String(right)) * direction;
-}
-
-function fmtPrice(entry: ModelReferenceEntry): string {
-  const price = entry.price;
-  const blended =
-    typeof price.blendedUsdPerMTok === 'number'
-      ? `$${price.blendedUsdPerMTok.toFixed(2)}`
-      : typeof price.blendedCnyPerMTok === 'number'
-        ? `¥${price.blendedCnyPerMTok.toFixed(2)}`
-        : null;
-  if (blended) return `${blended}/M`;
-  const input =
-    typeof price.inputUsdPerMTok === 'number'
-      ? `$${price.inputUsdPerMTok.toFixed(2)}`
-      : typeof price.inputCnyPerMTok === 'number'
-        ? `¥${price.inputCnyPerMTok.toFixed(2)}`
-        : null;
-  const output =
-    typeof price.outputUsdPerMTok === 'number'
-      ? `$${price.outputUsdPerMTok.toFixed(2)}`
-      : typeof price.outputCnyPerMTok === 'number'
-        ? `¥${price.outputCnyPerMTok.toFixed(2)}`
-        : null;
-  return input || output ? `${input ?? '-'}/${output ?? '-'}` : '-';
 }
 
 function scoreColumn(key: string, width: number) {
@@ -138,6 +104,27 @@ const scoreKeys = computed(() => {
     .filter((key) => !preferredScoreKeys.includes(key as (typeof preferredScoreKeys)[number]))
     .sort((a, b) => a.localeCompare(b));
   return [...preferred, ...extra];
+});
+
+const metricOptions = computed(() => [
+  { label: t('modelReference.allMetrics'), value: 'all' },
+  ...scoreKeys.value.map((key) => ({ label: t(`modelReference.columns.${key}`), value: key })),
+]);
+
+const visibleScoreKeys = computed(() => {
+  if (selectedMetric.value === 'all') return scoreKeys.value;
+  return scoreKeys.value.includes(selectedMetric.value) ? [selectedMetric.value] : scoreKeys.value;
+});
+
+const filteredItems = computed(() => {
+  const q = query.value.trim().toLowerCase();
+  return items.value.filter((item) => {
+    if (selectedMetric.value !== 'all' && scoreValue(item, selectedMetric.value) === null) return false;
+    if (!q) return true;
+    return [item.displayName, item.provider, item.normalizedModelName, item.sourceModelId]
+      .filter((value): value is string => typeof value === 'string')
+      .some((value) => value.toLowerCase().includes(q));
+  });
 });
 
 async function refreshList(): Promise<void> {
@@ -189,9 +176,16 @@ function onSorterUpdate(next: unknown): void {
 
 const sortedItems = computed(() => {
   const current = sortState.value;
-  if (!current || !current.order) return items.value;
+  if (!current || !current.order) {
+    if (selectedMetric.value !== 'all') {
+      return [...filteredItems.value].sort((a, b) =>
+        compareSortValue(scoreValue(a, selectedMetric.value), scoreValue(b, selectedMetric.value), 'descend'),
+      );
+    }
+    return filteredItems.value;
+  }
   const order = current.order;
-  return [...items.value].sort((a, b) =>
+  return [...filteredItems.value].sort((a, b) =>
     compareSortValue(sortValue(a, current.columnKey), sortValue(b, current.columnKey), order),
   );
 });
@@ -216,44 +210,43 @@ const pagination = computed(() => ({
   },
 }));
 
+const tableScrollX = computed(() => Math.max(760, 470 + visibleScoreKeys.value.length * 104));
+
 const columns = computed<DataTableColumns<ModelReferenceEntry>>(() => [
   {
     title: t('modelReference.columns.model'),
     key: 'displayName',
-    width: 260,
+    width: 300,
     fixed: 'left',
     ellipsis: { tooltip: true },
     sorter: true,
     sortOrder: sortState.value?.columnKey === 'displayName' ? sortState.value.order : false,
+    render: (row) =>
+      h('div', { class: 'model-cell' }, [
+        h('a', { href: row.sourceUrl, target: '_blank', rel: 'noreferrer' }, row.displayName),
+        h('span', row.normalizedModelName),
+      ]),
   },
   {
     title: t('modelReference.columns.provider'),
     key: 'provider',
-    width: 140,
+    width: 170,
+    render: (row) => row.provider ?? '-',
     sorter: true,
     sortOrder: sortState.value?.columnKey === 'provider' ? sortState.value.order : false,
   },
-  ...scoreKeys.value.map((key) => scoreColumn(key, key === 'costEfficiency' ? 120 : 100)),
-  {
-    title: t('modelReference.columns.price'),
-    key: 'price',
-    width: 130,
-    render: fmtPrice,
-    sorter: true,
-    sortOrder: sortState.value?.columnKey === 'price' ? sortState.value.order : false,
-  },
-  {
-    title: t('modelReference.columns.context'),
-    key: 'contextWindow',
-    width: 110,
-    render: (row) => (row.contextWindow ? row.contextWindow.toLocaleString() : '-'),
-    sorter: true,
-    sortOrder: sortState.value?.columnKey === 'contextWindow' ? sortState.value.order : false,
-  },
+  ...visibleScoreKeys.value.map((key) => scoreColumn(key, key === 'costEfficiency' ? 120 : 100)),
 ]);
 
 function syncLabel(row: ModelReferenceSyncStatus): string {
   return row.lastError ? `${row.status}: ${row.lastError}` : row.status;
+}
+
+function resetFilters(): void {
+  query.value = '';
+  selectedMetric.value = 'all';
+  sortState.value = null;
+  page.value = 1;
 }
 </script>
 
@@ -261,12 +254,29 @@ function syncLabel(row: ModelReferenceSyncStatus): string {
   <div class="page">
     <NCard>
       <NSpace align="center" justify="space-between" style="margin-bottom: 16px">
-        <NSpace align="center">
+        <NSpace align="center" wrap>
           <NText strong>{{ t('modelReference.title') }}</NText>
+          <NInput
+            v-model:value="query"
+            clearable
+            :placeholder="t('modelReference.searchPlaceholder')"
+            style="width: 260px"
+            @update:value="page = 1"
+          />
+          <NSelect
+            v-model:value="selectedMetric"
+            :options="metricOptions"
+            style="width: 180px"
+            @update:value="page = 1"
+          />
+          <NText depth="3">{{ t('modelReference.resultCount', { count: filteredItems.length }) }}</NText>
         </NSpace>
-        <NButton type="primary" :loading="refreshing" @click="refreshRemote">
-          {{ t('modelReference.refresh') }}
-        </NButton>
+        <NSpace>
+          <NButton secondary @click="resetFilters">{{ t('modelReference.reset') }}</NButton>
+          <NButton type="primary" :loading="refreshing" @click="refreshRemote">
+            {{ t('modelReference.refresh') }}
+          </NButton>
+        </NSpace>
       </NSpace>
 
       <NSpace v-if="sync.length > 0" style="margin-bottom: 12px">
@@ -283,7 +293,7 @@ function syncLabel(row: ModelReferenceSyncStatus): string {
         remote
         :single-line="false"
         :row-key="(row) => row.id"
-        :scroll-x="1280"
+        :scroll-x="tableScrollX"
         :pagination="pagination"
         :empty="h(NEmpty, { description: t('modelReference.empty') })"
         @update:sorter="onSorterUpdate"
@@ -296,5 +306,23 @@ function syncLabel(row: ModelReferenceSyncStatus): string {
 .page {
   max-width: 1400px;
   margin: 0 auto;
+}
+
+.model-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.model-cell a {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.model-cell span {
+  color: var(--text-color-3);
+  font-size: 12px;
 }
 </style>

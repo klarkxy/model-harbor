@@ -10,14 +10,14 @@ import {
 const dataLearnerHtml = `
 <html><body>
 <h3>AA Intelligence Index</h3>
-<div>1</div><div>DeepSeek Chat</div><div>DeepSeek</div><div>86</div>
+<div>1</div><div>Image: DeepSeek</div><div>DeepSeek Chat</div><div>DeepSeek</div><div>86</div>
 <h3>LMArena Text Generation</h3>
-<div>1</div><div>DeepSeek Chat</div><div>DeepSeek</div><div>1420</div>
+<div>1</div><div>Image: DeepSeek</div><div>DeepSeek Chat</div><div>DeepSeek</div><div>1420</div>
 <h3>大模型性能评测结果</h3>
-<div>1</div><div>DeepSeek Chat</div><div>DeepSeek</div>
+<div>1</div><div>Image: DeepSeek</div><div>DeepSeek Chat</div><div>DeepSeek</div>
 <div>HLE 48.20</div><div>ARC-AGI-2 40.00</div><div>FrontierMath - Tier 4 12.50</div>
-<div>SWE-bench Verified 80.60</div><div>τ²-Bench 81.00</div><div>免费商用</div>
-<div>2</div><div>Kimi K2</div><div>Moonshot AI</div>
+<div>SWE-bench Verified 80.60</div><div>τ²-Bench 81.00</div><div>免费商用</div><div>详情</div>
+<div>2</div><div>Image: Moonshot AI</div><div>Kimi K2</div><div>Moonshot AI</div>
 <div>HLE 54.00</div><div>ARC-AGI-2—</div><div>FrontierMath - Tier 4—</div>
 <div>SWE-bench Verified 90.20</div><div>τ²-Bench—</div><div>免费商用</div>
 </body></html>
@@ -91,6 +91,9 @@ describe('model reference admin API', () => {
       expect(list.json().items[0].region).toBe('global');
       expect(list.json().items[0].scores).toHaveProperty('math');
       expect(list.json().items[0].scores).toHaveProperty('chat');
+      const deepseek = list.json().items.find((item: { displayName: string }) => item.displayName === 'DeepSeek Chat');
+      expect(deepseek.provider).toBe('DeepSeek');
+      expect(list.json().items.some((item: { displayName: string }) => item.displayName.startsWith('Image:'))).toBe(false);
 
       const cached = await rig.app.inject({
         method: 'POST',
