@@ -10,7 +10,7 @@ import {
 const dataLearnerHtml = `
 <html><body>
 <h3>AA Intelligence Index</h3>
-<div>1</div><div>Image: DeepSeek</div><div>DeepSeek Chat</div><div>DeepSeek</div><div>86</div>
+<div>1</div><div>Image: DeepSeek</div><div>DeepSeek Chat DeepSeek</div><div>86</div>
 <h3>LMArena Text Generation</h3>
 <div>1</div><div>Image: DeepSeek</div><div>DeepSeek Chat</div><div>DeepSeek</div><div>1420</div>
 <h3>大模型性能评测结果</h3>
@@ -93,6 +93,7 @@ describe('model reference admin API', () => {
       expect(list.json().items[0].scores).toHaveProperty('chat');
       const deepseek = list.json().items.find((item: { displayName: string }) => item.displayName === 'DeepSeek Chat');
       expect(deepseek.provider).toBe('DeepSeek');
+      expect(deepseek.scores.intelligence).toBe(86);
       expect(list.json().items.some((item: { displayName: string }) => item.displayName.startsWith('Image:'))).toBe(false);
 
       const cached = await rig.app.inject({

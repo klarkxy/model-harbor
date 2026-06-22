@@ -38,6 +38,7 @@ const page = ref(1);
 const pageSize = ref(20);
 const query = ref('');
 const selectedMetric = ref('all');
+const selectedProvider = ref('all');
 
 const preferredScoreKeys = [
   'intelligence',
@@ -85,23 +86,6 @@ function compareSortValue(
   return String(left).localeCompare(String(right)) * direction;
 }
 
-/**
- * Numeric price per 1M tokens for chart comparison. Prefers blended
- * (input+output avg) and falls back to a single-side rate. Mirrors the
- * display logic in `fmtPrice` so the chart and table stay consistent.
- */
-function priceValue(entry: ModelReferenceEntry): number | null {
-  const price = entry.price;
-  const blended = price.blendedUsdPerMTok ?? price.blendedCnyPerMTok;
-  if (typeof blended === 'number' && Number.isFinite(blended)) return blended;
-  const input = price.inputUsdPerMTok ?? price.inputCnyPerMTok;
-  const output = price.outputUsdPerMTok ?? price.outputCnyPerMTok;
-  if (typeof input === 'number' && typeof output === 'number') return (input + output) / 2;
-  if (typeof input === 'number') return input;
-  if (typeof output === 'number') return output;
-  return null;
-}
-
 function scoreColumn(key: string, width: number) {
   return {
     title: t(`modelReference.columns.${key}`),
@@ -132,6 +116,12 @@ const metricOptions = computed(() => [
   ...scoreKeys.value.map((key) => ({ label: t(`modelReference.columns.${key}`), value: key })),
 ]);
 
+const providerOptions = computed(() => {
+  const providers = [...new Set(items.value.map((item) => item.provider).filter((value): value is string => !!value))]
+    .sort((a, b) => a.localeCompare(b));
+  return [{ label: t('modelReference.allProviders'), value: 'all' }, ...providers.map((value) => ({ label: value, value }))];
+});
+
 const visibleScoreKeys = computed(() => {
   if (selectedMetric.value === 'all') return scoreKeys.value;
   return scoreKeys.value.includes(selectedMetric.value) ? [selectedMetric.value] : scoreKeys.value;
@@ -140,6 +130,7 @@ const visibleScoreKeys = computed(() => {
 const filteredItems = computed(() => {
   const q = query.value.trim().toLowerCase();
   return items.value.filter((item) => {
+    if (selectedProvider.value !== 'all' && item.provider !== selectedProvider.value) return false;
     if (selectedMetric.value !== 'all' && scoreValue(item, selectedMetric.value) === null) return false;
     if (!q) return true;
     return [item.displayName, item.provider, item.normalizedModelName, item.sourceModelId]
@@ -243,9 +234,18 @@ const columns = computed<DataTableColumns<ModelReferenceEntry>>(() => [
     sorter: true,
     sortOrder: sortState.value?.columnKey === 'displayName' ? sortState.value.order : false,
     render: (row) =>
-      h('div', { class: 'model-cell' }, [
-        h('a', { href: row.sourceUrl, target: '_blank', rel: 'noreferrer' }, row.displayName),
-        h('span', row.normalizedModelName),
+      h('div', { style: 'display:flex;flex-direction:column;gap:2px;min-width:0' }, [
+        h(
+          'a',
+          {
+            href: row.sourceUrl,
+            target: '_blank',
+            rel: 'noreferrer',
+            style: 'color:inherit;font-weight:600;text-decoration:none',
+          },
+          row.displayName,
+        ),
+        h('span', { style: 'color:var(--text-color-3);font-size:12px' }, row.normalizedModelName),
       ]),
   },
   {
@@ -266,6 +266,7 @@ function syncLabel(row: ModelReferenceSyncStatus): string {
 function resetFilters(): void {
   query.value = '';
   selectedMetric.value = 'all';
+  selectedProvider.value = 'all';
   sortState.value = null;
   page.value = 1;
 }
@@ -340,17 +341,25 @@ const radarOption = computed<EChartsOption>(() => {
   };
 });
 
-const priceCompareOption = computed<EChartsOption>(() => {
-  const data = compareModels.value
-    .map((m) => ({
-      name: m.displayName || m.normalizedModelName,
-      value: priceValue(m),
-    }))
-    .filter((d): d is { name: string; value: number } => d.value !== null);
+const metricCompareKey = computed(() => {
+  if (selectedMetric.value !== 'all' && scoreKeys.value.includes(selectedMetric.value)) return selectedMetric.value;
+  return scoreKeys.value.includes('intelligence') ? 'intelligence' : scoreKeys.value[0] ?? '';
+});
+
+const metricCompareOption = computed<EChartsOption>(() => {
+  const key = metricCompareKey.value;
+  const data = key
+    ? compareModels.value
+        .map((m) => ({
+          name: m.displayName || m.normalizedModelName,
+          value: scoreValue(m, key),
+        }))
+        .filter((d): d is { name: string; value: number } => d.value !== null)
+    : [];
   if (data.length === 0) {
     return {
       title: {
-        text: t('modelReference.compare.price'),
+        text: t('modelReference.compare.metric'),
         left: 'center',
         top: 'middle',
         textStyle: { fontSize: 13, fontWeight: 'normal' },
@@ -368,7 +377,7 @@ const priceCompareOption = computed<EChartsOption>(() => {
       data: data.map((d) => d.name),
       axisLabel: { rotate: 20, interval: 0 },
     },
-    yAxis: { type: 'value', name: t('modelReference.compare.price') },
+    yAxis: { type: 'value', name: t(`modelReference.columns.${key}`) },
     series: [
       {
         type: 'bar',
@@ -402,7 +411,24 @@ const priceCompareOption = computed<EChartsOption>(() => {
             style="width: 180px"
             @update:value="page = 1"
           />
+          <NSelect
+            v-model:value="selectedProvider"
+            :options="providerOptions"
+            filterable
+            style="width: 190px"
+            @update:value="page = 1"
+          />
           <NText depth="3">{{ t('modelReference.resultCount', { count: filteredItems.length }) }}</NText>
+          <NSelect
+            v-model:value="compareSelection"
+            multiple
+            filterable
+            clearable
+            :options="compareOptions"
+            :placeholder="t('modelReference.compare.selectPlaceholder')"
+            :max-tag-count="1"
+            style="width: 280px"
+          />
         </NSpace>
         <NSpace>
           <NButton secondary @click="resetFilters">{{ t('modelReference.reset') }}</NButton>
@@ -418,36 +444,6 @@ const priceCompareOption = computed<EChartsOption>(() => {
         </NTag>
       </NSpace>
 
-      <NCard size="small" style="margin-bottom: 16px">
-        <NSpace align="center" justify="space-between" style="margin-bottom: 8px">
-          <NText strong>{{ t('modelReference.compare.title') }}</NText>
-          <NSelect
-            v-model:value="compareSelection"
-            multiple
-            filterable
-            clearable
-            :options="compareOptions"
-            :placeholder="t('modelReference.compare.selectPlaceholder')"
-            :max-tag-count="3"
-            style="min-width: 320px; max-width: 520px"
-          />
-        </NSpace>
-        <NGrid :cols="2" :x-gap="16" :y-gap="16" responsive="screen">
-          <NGi :span="1">
-            <NText depth="3" style="display: block; margin-bottom: 4px">
-              {{ t('modelReference.compare.radar') }}
-            </NText>
-            <EChart :option="radarOption" :height="280" />
-          </NGi>
-          <NGi :span="1">
-            <NText depth="3" style="display: block; margin-bottom: 4px">
-              {{ t('modelReference.compare.price') }}
-            </NText>
-            <EChart :option="priceCompareOption" :height="280" />
-          </NGi>
-        </NGrid>
-      </NCard>
-
       <NDataTable
         :columns="columns"
         :data="pagedItems"
@@ -461,6 +457,24 @@ const priceCompareOption = computed<EChartsOption>(() => {
         :empty="h(NEmpty, { description: t('modelReference.empty') })"
         @update:sorter="onSorterUpdate"
       />
+
+      <NCard v-if="compareModels.length > 0" size="small" style="margin-top: 16px">
+        <NText strong style="display: block; margin-bottom: 8px">{{ t('modelReference.compare.title') }}</NText>
+        <NGrid :cols="2" :x-gap="16" :y-gap="16" responsive="screen">
+          <NGi :span="1">
+            <NText depth="3" style="display: block; margin-bottom: 4px">
+              {{ t('modelReference.compare.radar') }}
+            </NText>
+            <EChart :option="radarOption" :height="280" />
+          </NGi>
+          <NGi :span="1">
+            <NText depth="3" style="display: block; margin-bottom: 4px">
+              {{ t('modelReference.compare.metric') }}
+            </NText>
+            <EChart :option="metricCompareOption" :height="280" />
+          </NGi>
+        </NGrid>
+      </NCard>
     </NCard>
   </div>
 </template>
@@ -469,23 +483,5 @@ const priceCompareOption = computed<EChartsOption>(() => {
 .page {
   max-width: 1400px;
   margin: 0 auto;
-}
-
-.model-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.model-cell a {
-  color: inherit;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.model-cell span {
-  color: var(--text-color-3);
-  font-size: 12px;
 }
 </style>

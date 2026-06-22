@@ -55,6 +55,25 @@ export interface AutoGroupRecommendation {
 
 const DATALEARNER_LEADERBOARD_URL = 'https://www.datalearner.com/leaderboards';
 
+const DATALEARNER_PROVIDER_SUFFIXES = [
+  'Facebook AI研究实验室',
+  'Google Deep Mind',
+  '字节跳动Seed团队',
+  'Microsoft Azure',
+  'Google Research',
+  'Stability AI',
+  'DeepSeek-AI',
+  'Anthropic',
+  'MistralAI',
+  '阿里巴巴',
+  'OpenAI',
+  '智谱AI',
+  'Google',
+  'DeepSeek',
+  '百度',
+  'xAI',
+] as const;
+
 const PRESET_WEIGHTS: Record<AutoGroupPreset, Required<AutoGroupWeights>> = {
   balanced: {
     intelligence: 0.2,
@@ -375,6 +394,8 @@ function entryId(): string {
 
 function isLikelyModelName(line: string): boolean {
   if (line.length < 2 || line.length > 120) return false;
+  if (/^(AA Intelligence Index|LMArena Text Generation|大模型性能评测结果)$/.test(line)) return false;
+  if (/^(#|基于|用于|反映|点击|查看|知名模型开发商)/.test(line)) return false;
   if (/^(Image:|详情|查看详情|完整排名|来源：|数据更新于|数据来源：|排名|模型|分数|Elo)/i.test(line)) {
     return false;
   }
@@ -389,6 +410,14 @@ function parseBenchmarkLine(line: string): [string, number | null] | null {
   const match = line.match(/^(HLE|ARC-AGI-2|FrontierMath(?: - Tier 4)?|SWE-bench Verified|τ²-Bench)\s*(—|-|\d+(?:\.\d+)?)$/);
   if (!match) return null;
   return [match[1]!, parseNumber(match[2])];
+}
+
+function splitProviderSuffix(value: string, provider: string | null): { displayName: string; provider: string | null } {
+  if (provider) return { displayName: value, provider };
+  const match = DATALEARNER_PROVIDER_SUFFIXES.find((suffix) => value.endsWith(` ${suffix}`));
+  if (!match) return { displayName: value, provider };
+  const displayName = value.slice(0, -match.length).trim();
+  return displayName ? { displayName, provider: match } : { displayName: value, provider };
 }
 
 function mapDataLearnerScores(raw: Record<string, number>): Record<string, number> {
@@ -419,6 +448,19 @@ function mapDataLearnerScores(raw: Record<string, number>): Record<string, numbe
   return scores;
 }
 
+function mergeNumericScores(left: Record<string, unknown>, right: Record<string, unknown>): Record<string, unknown> {
+  const merged = { ...left };
+  for (const [key, value] of Object.entries(right)) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      const existing = merged[key];
+      merged[key] = typeof existing === 'number' && Number.isFinite(existing) ? Math.max(existing, value) : value;
+    } else {
+      merged[key] = value;
+    }
+  }
+  return merged;
+}
+
 function makeDataLearnerEntry(
   input: {
     displayName: string;
@@ -429,7 +471,8 @@ function makeDataLearnerEntry(
   now: Date,
   region: ModelReferenceRegion,
 ): ModelReferenceEntryInsert | null {
-  const normalized = normalizeModelName(input.displayName);
+  const identity = splitProviderSuffix(input.displayName, input.provider);
+  const normalized = normalizeModelName(identity.displayName);
   const scores = mapDataLearnerScores(input.rawScores);
   if (!normalized || Object.keys(scores).length === 0) return null;
   return {
@@ -437,9 +480,9 @@ function makeDataLearnerEntry(
     region,
     source: 'datalearner',
     normalizedModelName: normalized,
-    sourceModelId: input.displayName,
-    displayName: input.displayName,
-    provider: input.provider,
+    sourceModelId: identity.displayName,
+    displayName: identity.displayName,
+    provider: identity.provider,
     scoresJson: JSON.stringify(scores),
     priceJson: JSON.stringify({ source: 'datalearner' }),
     contextWindow: null,
@@ -513,6 +556,8 @@ function parseDataLearnerSimpleRanking(
     const provider = nameCandidates[1] ?? null;
     const value = parseNumber(window[numericIndex]);
     if (!displayName || value === null) continue;
+    if (scoreKey === 'aa_intelligence' && (value < 0 || value > 100)) continue;
+    if (scoreKey === 'lmarena' && (value < 1000 || value > 2000)) continue;
     const entry = makeDataLearnerEntry(
       {
         displayName,
@@ -546,10 +591,10 @@ async function fetchDataLearnerEntries(now: Date, region: ModelReferenceRegion):
       byModel.set(entry.normalizedModelName, entry);
       continue;
     }
-    const mergedScores = {
-      ...parseJsonRecord(existing.scoresJson ?? '{}'),
-      ...parseJsonRecord(entry.scoresJson ?? '{}'),
-    };
+    const mergedScores = mergeNumericScores(
+      parseJsonRecord(existing.scoresJson ?? '{}'),
+      parseJsonRecord(entry.scoresJson ?? '{}'),
+    );
     byModel.set(entry.normalizedModelName, {
       ...existing,
       scoresJson: JSON.stringify(mergedScores),

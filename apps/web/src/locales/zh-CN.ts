@@ -137,7 +137,7 @@ const messages: Messages = {
   overview: {
     banner: {
       tag: 'v0.1.0',
-      text: 'ModelHarbor · 模型路由已上线，M7 开始观测。',
+      text: 'ModelHarbor · 模型路由已上线，开始观测流量。',
     },
     stats: {
       apps: '应用',
@@ -495,6 +495,7 @@ const messages: Messages = {
     empty: '暂无参考数据',
     sync: '同步状态',
     allMetrics: '全部维度',
+    allProviders: '全部供应商',
     searchPlaceholder: '搜索模型或供应商',
     resultCount: '{count} 条',
     columns: {
@@ -510,6 +511,7 @@ const messages: Messages = {
       coding: '代码',
       agentic: 'Agent',
       costEfficiency: '性价比',
+      lmarena_elo: 'Arena Elo',
       price: '价格',
       context: '上下文',
       updated: '更新时间',
@@ -518,8 +520,8 @@ const messages: Messages = {
       title: '模型对比',
       selectPlaceholder: '最多选择 3 个模型对比',
       radar: '评分雷达图',
-      price: '价格对比（每百万 token）',
-      average: '均价',
+      metric: '当前维度对比',
+      average: '平均值',
     },
   },
   apps: {
