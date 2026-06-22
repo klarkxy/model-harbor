@@ -20,6 +20,8 @@ import {
 } from '../api/admin.js';
 
 type ReferenceRegion = 'international' | 'domestic';
+type SortOrder = 'ascend' | 'descend' | false;
+type SortState = { columnKey: string | number; order: SortOrder } | null;
 
 const { t } = useI18n();
 const message = useMessage();
@@ -28,6 +30,9 @@ const loading = ref(false);
 const refreshing = ref(false);
 const items = ref<ModelReferenceEntry[]>([]);
 const sync = ref<ModelReferenceSyncStatus[]>([]);
+const sortState = ref<SortState>(null);
+const page = ref(1);
+const pageSize = ref(20);
 
 const regionOptions = computed(() => [
   { label: t('modelGroups.drawer.regions.international'), value: 'international' },
@@ -41,6 +46,49 @@ function fmtDate(value: string | null): string {
 function score(entry: ModelReferenceEntry, key: string): string {
   const value = entry.scores[key];
   return typeof value === 'number' ? value.toFixed(1) : '-';
+}
+
+function scoreValue(entry: ModelReferenceEntry, key: string): number | null {
+  const value = entry.scores[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function priceValue(entry: ModelReferenceEntry): number | null {
+  const price = entry.price;
+  const blended = price.blendedUsdPerMTok ?? price.blendedCnyPerMTok;
+  if (typeof blended === 'number' && Number.isFinite(blended)) return blended;
+  const input = price.inputUsdPerMTok ?? price.inputCnyPerMTok;
+  const output = price.outputUsdPerMTok ?? price.outputCnyPerMTok;
+  if (typeof input === 'number' && typeof output === 'number') return (input + output) / 2;
+  if (typeof input === 'number') return input;
+  if (typeof output === 'number') return output;
+  return null;
+}
+
+function sortValue(entry: ModelReferenceEntry, key: string | number): string | number | null {
+  if (key === 'displayName') return entry.displayName || entry.normalizedModelName || null;
+  if (key === 'provider') return entry.provider || null;
+  if (key === 'price') return priceValue(entry);
+  if (key === 'contextWindow') return entry.contextWindow;
+  if (typeof key === 'string') return scoreValue(entry, key);
+  return null;
+}
+
+function compareSortValue(
+  left: string | number | null,
+  right: string | number | null,
+  order: Exclude<SortOrder, false>,
+): number {
+  const leftEmpty = left === null || left === '';
+  const rightEmpty = right === null || right === '';
+  if (leftEmpty && rightEmpty) return 0;
+  if (leftEmpty) return 1;
+  if (rightEmpty) return -1;
+  const direction = order === 'ascend' ? 1 : -1;
+  if (typeof left === 'number' && typeof right === 'number') {
+    return (left - right) * direction;
+  }
+  return String(left).localeCompare(String(right)) * direction;
 }
 
 function fmtPrice(entry: ModelReferenceEntry): string {
@@ -67,12 +115,24 @@ function fmtPrice(entry: ModelReferenceEntry): string {
   return input || output ? `${input ?? '-'}/${output ?? '-'}` : '-';
 }
 
+function scoreColumn(key: string, width: number) {
+  return {
+    title: t(`modelReference.columns.${key}`),
+    key,
+    width,
+    render: (row: ModelReferenceEntry) => score(row, key),
+    sorter: true,
+    sortOrder: sortState.value?.columnKey === key ? sortState.value.order : false,
+  };
+}
+
 async function refreshList(): Promise<void> {
   loading.value = true;
   try {
     const res = await modelReferenceApi.list(region.value);
     items.value = res.items;
     sync.value = res.sync;
+    page.value = 1;
   } catch (err) {
     message.error((err as Error).message);
   } finally {
@@ -86,6 +146,7 @@ async function refreshRemote(): Promise<void> {
     const res = await modelReferenceApi.refresh(region.value, true);
     items.value = res.items.items;
     sync.value = res.items.sync;
+    page.value = 1;
     message.success(t('modelReference.refreshed'));
   } catch (err) {
     message.error((err as Error).message);
@@ -97,6 +158,50 @@ async function refreshRemote(): Promise<void> {
 
 onMounted(refreshList);
 
+function onSorterUpdate(next: unknown): void {
+  const state = Array.isArray(next) ? next[0] : next;
+  if (!state || typeof state !== 'object') {
+    sortState.value = null;
+    return;
+  }
+  const candidate = state as { columnKey?: unknown; order?: unknown };
+  sortState.value =
+    (typeof candidate.columnKey === 'string' || typeof candidate.columnKey === 'number') &&
+    (candidate.order === 'ascend' || candidate.order === 'descend')
+      ? { columnKey: candidate.columnKey, order: candidate.order }
+      : null;
+  page.value = 1;
+}
+
+const sortedItems = computed(() => {
+  const current = sortState.value;
+  if (!current || !current.order) return items.value;
+  const order = current.order;
+  return [...items.value].sort((a, b) =>
+    compareSortValue(sortValue(a, current.columnKey), sortValue(b, current.columnKey), order),
+  );
+});
+
+const pagedItems = computed(() => {
+  const start = (page.value - 1) * pageSize.value;
+  return sortedItems.value.slice(start, start + pageSize.value);
+});
+
+const pagination = computed(() => ({
+  page: page.value,
+  pageSize: pageSize.value,
+  itemCount: sortedItems.value.length,
+  showSizePicker: true,
+  pageSizes: [20, 50, 100],
+  onUpdatePage: (nextPage: number) => {
+    page.value = nextPage;
+  },
+  onUpdatePageSize: (nextPageSize: number) => {
+    pageSize.value = nextPageSize;
+    page.value = 1;
+  },
+}));
+
 const columns = computed<DataTableColumns<ModelReferenceEntry>>(() => [
   {
     title: t('modelReference.columns.model'),
@@ -104,21 +209,35 @@ const columns = computed<DataTableColumns<ModelReferenceEntry>>(() => [
     width: 260,
     fixed: 'left',
     ellipsis: { tooltip: true },
+    sorter: true,
+    sortOrder: sortState.value?.columnKey === 'displayName' ? sortState.value.order : false,
   },
-  { title: t('modelReference.columns.provider'), key: 'provider', width: 140 },
-  { title: t('modelReference.columns.intelligence'), key: 'intelligence', width: 100, render: (row) => score(row, 'intelligence') },
-  { title: t('modelReference.columns.reasoning'), key: 'reasoning', width: 100, render: (row) => score(row, 'reasoning') },
-  { title: t('modelReference.columns.coding'), key: 'coding', width: 90, render: (row) => score(row, 'coding') },
-  { title: t('modelReference.columns.agentic'), key: 'agentic', width: 90, render: (row) => score(row, 'agentic') },
-  { title: t('modelReference.columns.math'), key: 'math', width: 90, render: (row) => score(row, 'math') },
-  { title: t('modelReference.columns.creative'), key: 'creative', width: 90, render: (row) => score(row, 'creative') },
-  { title: t('modelReference.columns.instruction'), key: 'instruction', width: 110, render: (row) => score(row, 'instruction') },
-  { title: t('modelReference.columns.price'), key: 'price', width: 130, render: fmtPrice },
+  {
+    title: t('modelReference.columns.provider'),
+    key: 'provider',
+    width: 140,
+    sorter: true,
+    sortOrder: sortState.value?.columnKey === 'provider' ? sortState.value.order : false,
+  },
+  scoreColumn('intelligence', 100),
+  scoreColumn('reasoning', 100),
+  scoreColumn('coding', 90),
+  scoreColumn('agentic', 90),
+  {
+    title: t('modelReference.columns.price'),
+    key: 'price',
+    width: 130,
+    render: fmtPrice,
+    sorter: true,
+    sortOrder: sortState.value?.columnKey === 'price' ? sortState.value.order : false,
+  },
   {
     title: t('modelReference.columns.context'),
     key: 'contextWindow',
     width: 110,
     render: (row) => (row.contextWindow ? row.contextWindow.toLocaleString() : '-'),
+    sorter: true,
+    sortOrder: sortState.value?.columnKey === 'contextWindow' ? sortState.value.order : false,
   },
 ]);
 </script>
@@ -149,13 +268,16 @@ const columns = computed<DataTableColumns<ModelReferenceEntry>>(() => [
 
       <NDataTable
         :columns="columns"
-        :data="items"
+        :data="pagedItems"
         :loading="loading"
         :bordered="false"
+        remote
         :single-line="false"
         :row-key="(row) => row.id"
         :scroll-x="1280"
+        :pagination="pagination"
         :empty="h(NEmpty, { description: t('modelReference.empty') })"
+        @update:sorter="onSorterUpdate"
       />
     </NCard>
   </div>

@@ -344,9 +344,6 @@ const autoWeightKeys = [
   'reasoning',
   'coding',
   'agentic',
-  'math',
-  'creative',
-  'instruction',
   'price',
   'context',
 ] as const;

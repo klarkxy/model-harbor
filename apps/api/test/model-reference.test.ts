@@ -66,14 +66,62 @@ const openRouterPayload = {
   ],
 };
 
+const aiderHtml = `
+<html><body>
+<ul>
+<li>Model : DeepSeek-V3.2-Exp (Chat)</li>
+<li>Pass rate 1 : 38.7</li>
+<li>Pass rate 2 : 70.2</li>
+<li>Percent cases well formed : 98.2</li>
+<li>Command : \`aider --model deepseek/deepseek-chat\`</li>
+<li>Date : 2025-10-03</li>
+<li>Total cost : 0.8756</li>
+<li>Model : Qwen Plus</li>
+<li>Pass rate 1 : 34.0</li>
+<li>Pass rate 2 : 69.0</li>
+<li>Percent cases well formed : 95.0</li>
+<li>Command : \`aider --model qwen/qwen-plus\`</li>
+<li>Date : 2025-10-04</li>
+<li>Total cost : 1.2</li>
+<li>Model : Kimi K2</li>
+<li>Pass rate 1 : 42.0</li>
+<li>Pass rate 2 : 90.0</li>
+<li>Percent cases well formed : 99.0</li>
+<li>Command : \`aider --model moonshotai/kimi-k2\`</li>
+<li>Date : 2025-10-05</li>
+<li>Total cost : 2.5</li>
+</ul>
+</body></html>
+`;
+
 function mockOpenRouter() {
   vi.stubGlobal(
     'fetch',
-    vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      json: async () => openRouterPayload,
-    })),
+    vi.fn(async (url: string) => {
+      const href = String(url);
+      if (href.includes('openrouter.ai/api')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => openRouterPayload,
+          text: async () => JSON.stringify(openRouterPayload),
+        };
+      }
+      if (href.includes('aider.chat')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({}),
+          text: async () => aiderHtml,
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({}),
+        text: async () => '<html></html>',
+      };
+    }),
   );
 }
 
@@ -109,7 +157,8 @@ describe('model reference admin API', () => {
       });
       expect(refreshed.statusCode).toBe(200);
       expect(refreshed.json().refreshed).toBe(true);
-      expect(refreshed.json().source).toBe('openrouter');
+      expect(refreshed.json().sources).toContain('openrouter');
+      expect(refreshed.json().sources).toContain('aider');
 
       const domestic = await rig.app.inject({
         method: 'GET',
@@ -118,6 +167,7 @@ describe('model reference admin API', () => {
       });
       expect(domestic.statusCode).toBe(200);
       expect(domestic.json().items.length).toBeGreaterThan(0);
+      expect(domestic.json().sync.length).toBeGreaterThan(1);
 
       const international = await rig.app.inject({
         method: 'GET',

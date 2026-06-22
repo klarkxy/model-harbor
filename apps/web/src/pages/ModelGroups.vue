@@ -10,6 +10,7 @@ import {
   NEmpty,
   NForm,
   NFormItem,
+  NIcon,
   NInput,
   NInputNumber,
   NSelect,
@@ -17,9 +18,11 @@ import {
   NTag,
   NText,
   NPopconfirm,
+  NTooltip,
   useMessage,
   type DataTableColumns,
 } from 'naive-ui';
+import { ReorderFourOutline } from '@vicons/ionicons5';
 import {
   modelGroupsApi,
   publicModelsApi,
@@ -44,6 +47,9 @@ const defaultReferenceRegion = ref<'international' | 'domestic'>('international'
 const defaultAutoPreset = ref('balanced');
 const defaultAutoTopN = ref(5);
 const defaultAutoWeights = ref<Record<string, number>>({});
+const draggingIndex = ref<number | null>(null);
+const dragOverIndex = ref<number | null>(null);
+const dragOverPosition = ref<'before' | 'after'>('before');
 
 const form = ref<ModelGroupCreatePayload>({
   name: '',
@@ -109,7 +115,7 @@ function addMember() {
   }
   memberRows.value.push({
     publicModelId: publicModelOptions.value[0]!.id,
-    priority: 100,
+    priority: (memberRows.value.length + 1) * 10,
     weight: 1,
   });
 }
@@ -139,10 +145,10 @@ async function onSubmit() {
             autoWeights: form.value.autoWeights,
           }
         : {
-            members: memberRows.value.map((m) => ({
+            members: memberRows.value.map((m, idx) => ({
               publicModelId: m.publicModelId,
-              priority: m.priority,
-              weight: m.weight,
+              priority: (idx + 1) * 10,
+              weight: 1,
             })),
           }),
     };
@@ -209,7 +215,6 @@ const columns = computed<DataTableColumns<ModelGroup>>(() => [
           : t('modelGroups.status.manual'),
       ),
   },
-  { title: t('modelGroups.columns.policy'), key: 'routingPolicy', width: 100 },
   { title: t('modelGroups.columns.members'), key: 'memberCount', width: 100 },
   {
     title: t('modelGroups.columns.status'),
@@ -252,8 +257,7 @@ const modelOptions = computed(() =>
 
 const policyOptions = computed(() => [
   { label: t('modelGroups.drawer.policies.priority'), value: 'priority' },
-  { label: t('modelGroups.drawer.policies.failover'), value: 'failover' },
-  { label: t('modelGroups.drawer.policies.round_robin'), value: 'round_robin' },
+  { label: t('modelGroups.drawer.policies.roundRobin'), value: 'round_robin' },
   { label: t('modelGroups.drawer.policies.random'), value: 'random' },
   { label: t('modelGroups.drawer.policies.weighted'), value: 'weighted' },
 ]);

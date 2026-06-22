@@ -25,9 +25,6 @@ export interface AutoGroupWeights {
   coding?: number;
   agentic?: number;
   reasoning?: number;
-  math?: number;
-  creative?: number;
-  instruction?: number;
   price?: number;
   context?: number;
 }
@@ -52,6 +49,11 @@ export interface AutoGroupRecommendation {
 }
 
 const OPENROUTER_MODELS_URL = 'https://openrouter.ai/api/v1/models';
+const ARTIFICIAL_ANALYSIS_URL = 'https://artificialanalysis.ai/leaderboards/models';
+const AIDER_LEADERBOARD_URL = 'https://aider.chat/docs/leaderboards/';
+const ARENA_LEADERBOARD_URL = 'https://arena.ai/leaderboard';
+const OPENCOMPASS_LEADERBOARD_URL = 'https://rank.opencompass.org.cn/leaderboard-llm-v2';
+const SUPERCLUE_URL = 'https://www.superclueai.com/';
 
 const DOMESTIC_OPENROUTER_PROVIDERS = [
   'deepseek',
@@ -69,58 +71,43 @@ const DOMESTIC_OPENROUTER_PROVIDERS = [
 
 const PRESET_WEIGHTS: Record<AutoGroupPreset, Required<AutoGroupWeights>> = {
   balanced: {
-    intelligence: 0.28,
-    reasoning: 0.16,
-    coding: 0.18,
-    agentic: 0.14,
-    math: 0.06,
-    creative: 0.04,
-    instruction: 0.04,
-    price: 0.08,
+    intelligence: 0.34,
+    reasoning: 0.18,
+    coding: 0.2,
+    agentic: 0.16,
+    price: 0.1,
     context: 0.02,
   },
   chat: {
-    intelligence: 0.36,
-    reasoning: 0.12,
+    intelligence: 0.54,
+    reasoning: 0.16,
     coding: 0.04,
-    agentic: 0.12,
-    math: 0.04,
-    creative: 0.12,
-    instruction: 0.12,
-    price: 0.06,
+    agentic: 0.16,
+    price: 0.08,
     context: 0.02,
   },
   code: {
     intelligence: 0.12,
     reasoning: 0.14,
-    coding: 0.52,
+    coding: 0.58,
     agentic: 0.12,
-    math: 0.04,
-    creative: 0,
-    instruction: 0.02,
     price: 0.03,
     context: 0.01,
   },
   plan: {
-    intelligence: 0.18,
-    reasoning: 0.28,
+    intelligence: 0.22,
+    reasoning: 0.32,
     coding: 0.08,
-    agentic: 0.3,
-    math: 0.04,
-    creative: 0.04,
-    instruction: 0.04,
-    price: 0.02,
+    agentic: 0.32,
+    price: 0.04,
     context: 0.02,
   },
   cheap: {
-    intelligence: 0.12,
-    reasoning: 0.06,
-    coding: 0.06,
-    agentic: 0.04,
-    math: 0.02,
-    creative: 0,
-    instruction: 0.02,
-    price: 0.66,
+    intelligence: 0.14,
+    reasoning: 0.08,
+    coding: 0.08,
+    agentic: 0.06,
+    price: 0.62,
     context: 0.02,
   },
 };
@@ -211,9 +198,6 @@ function coerceWeights(preset: AutoGroupPreset, weights: unknown): Required<Auto
         reasoning: 0,
         coding: 0,
         agentic: 0,
-        math: 0,
-        creative: 0,
-        instruction: 0,
         price: 0,
         context: 0,
       }
@@ -256,6 +240,64 @@ function presentEntry(row: ModelReferenceEntryRow) {
   };
 }
 
+function presentAggregatedEntries(rows: ModelReferenceEntryRow[]) {
+  const grouped = new Map<string, ModelReferenceEntryRow[]>();
+  for (const row of rows) {
+    const list = grouped.get(row.normalizedModelName) ?? [];
+    list.push(row);
+    grouped.set(row.normalizedModelName, list);
+  }
+  return [...grouped.entries()].map(([normalizedModelName, group]) => {
+    const primary =
+      group.find((row) => row.source === 'openrouter') ??
+      group.find((row) => row.source === 'artificial_analysis') ??
+      group[0]!;
+    const scores: Record<string, number> = {};
+    let bestPrice: Record<string, unknown> = {};
+    let bestPriceValue: number | null = null;
+    let contextWindow: number | null = null;
+    let outputSpeed: number | null = null;
+    let latencyMs: number | null = null;
+    for (const row of group) {
+      for (const [key, value] of Object.entries(numericScores(row))) {
+        scores[key] = Math.max(scores[key] ?? 0, value);
+      }
+      const rowPrice = priceForScore(row);
+      if (rowPrice !== null && (bestPriceValue === null || rowPrice < bestPriceValue)) {
+        bestPriceValue = rowPrice;
+        bestPrice = parseJsonRecord(row.priceJson);
+      }
+      if (row.contextWindow !== null && row.contextWindow > (contextWindow ?? 0)) {
+        contextWindow = row.contextWindow;
+      }
+      if (row.outputSpeed !== null && row.outputSpeed > (outputSpeed ?? 0)) {
+        outputSpeed = row.outputSpeed;
+      }
+      if (row.latencyMs !== null && (latencyMs === null || row.latencyMs < latencyMs)) {
+        latencyMs = row.latencyMs;
+      }
+    }
+    return {
+      id: `agg_${normalizedModelName}`,
+      region: primary.region,
+      source: group.map((row) => row.source).join(','),
+      normalizedModelName,
+      sourceModelId: primary.sourceModelId,
+      displayName: primary.displayName,
+      provider: primary.provider,
+      scores,
+      price: bestPrice,
+      contextWindow,
+      outputSpeed,
+      latencyMs,
+      sourceUrl: primary.sourceUrl,
+      rawUnit: primary.rawUnit,
+      fetchedAt: new Date(Math.max(...group.map((row) => row.fetchedAt.getTime()))),
+      updatedAt: new Date(Math.max(...group.map((row) => row.updatedAt.getTime()))),
+    };
+  });
+}
+
 async function ensureSyncStatus(db: Db, region: ModelReferenceRegion, source: ModelReferenceSource) {
   const existing = await db
     .select()
@@ -288,8 +330,10 @@ async function ensureSyncStatus(db: Db, region: ModelReferenceRegion, source: Mo
   );
 }
 
-function sourceForRegion(_region: ModelReferenceRegion): ModelReferenceSource {
-  return 'openrouter';
+function sourcesForRegion(region: ModelReferenceRegion): ModelReferenceSource[] {
+  return region === 'domestic'
+    ? ['openrouter', 'aider', 'opencompass', 'superclue']
+    : ['openrouter', 'artificial_analysis', 'arena', 'aider'];
 }
 
 function normalizeScoreKey(key: string): string {
@@ -334,6 +378,36 @@ function isDomesticOpenRouterModel(id: string, name: string): boolean {
   return DOMESTIC_OPENROUTER_PROVIDERS.some((provider) => haystack.includes(provider));
 }
 
+function isDomesticReferenceModel(id: string, name: string): boolean {
+  return isDomesticOpenRouterModel(id, name);
+}
+
+function stripHtmlToLines(html: string): string[] {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, '\n')
+    .replace(/<style[\s\S]*?<\/style>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|tr|td|th|h[1-6])>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+}
+
+function parseNumber(value: string | undefined): number | null {
+  if (!value) return null;
+  const parsed = Number(value.replace(/[$,%]/g, ''));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function entryId(): string {
+  return `mr_${generateId('modelReference').slice(-18)}`;
+}
+
 function mapOpenRouterModel(
   raw: unknown,
   now: Date,
@@ -369,7 +443,7 @@ function mapOpenRouterModel(
   price.source = 'openrouter';
   const contextLength = typeof item.context_length === 'number' ? item.context_length : null;
   return {
-    id: `mr_${generateId('modelReference').slice(-18)}`,
+    id: entryId(),
     region,
     source: 'openrouter',
     normalizedModelName: normalized,
@@ -407,6 +481,197 @@ async function fetchOpenRouterEntries(
     .filter((item): item is ModelReferenceEntryInsert => !!item);
 }
 
+function mapAiderBlock(
+  block: string[],
+  now: Date,
+  region: ModelReferenceRegion,
+): ModelReferenceEntryInsert | null {
+  const modelLine = block.find((line) => line.startsWith('Model : '));
+  const commandLine = block.find((line) => line.startsWith('Command : '));
+  const passRate2Line = block.find((line) => line.startsWith('Pass rate 2 : '));
+  if (!modelLine || !passRate2Line) return null;
+  const displayName = modelLine.replace(/^Model : /, '').trim();
+  const commandModel = commandLine?.match(/--model\s+([^\s`]+)/)?.[1];
+  const sourceModelId = commandModel ?? displayName;
+  if (region === 'domestic' && !isDomesticReferenceModel(sourceModelId, displayName)) return null;
+  const normalized = normalizeModelName(sourceModelId);
+  if (!normalized) return null;
+  const passRate1 = parseNumber(block.find((line) => line.startsWith('Pass rate 1 : '))?.replace(/^Pass rate 1 : /, ''));
+  const passRate2 = parseNumber(passRate2Line.replace(/^Pass rate 2 : /, ''));
+  const wellFormed = parseNumber(
+    block.find((line) => line.startsWith('Percent cases well formed : '))?.replace(/^Percent cases well formed : /, ''),
+  );
+  const totalCost = parseNumber(block.find((line) => line.startsWith('Total cost : '))?.replace(/^Total cost : /, ''));
+  const secondsPerCase = parseNumber(
+    block.find((line) => line.startsWith('Seconds per case : '))?.replace(/^Seconds per case : /, ''),
+  );
+  const date = block.find((line) => line.startsWith('Date : '))?.replace(/^Date : /, '').trim();
+  const scores: Record<string, number> = {};
+  if (passRate2 !== null) scores.coding = passRate2;
+  if (passRate1 !== null) scores.aider_pass_rate_1 = passRate1;
+  if (passRate2 !== null) scores.aider_pass_rate_2 = passRate2;
+  if (wellFormed !== null) scores.aider_well_formed = wellFormed;
+  const price: Record<string, number | string | boolean> = { source: 'aider' };
+  if (totalCost !== null) price.aiderTotalUsd = totalCost;
+  return {
+    id: entryId(),
+    region,
+    source: 'aider',
+    normalizedModelName: normalized,
+    sourceModelId,
+    displayName,
+    provider: sourceModelId.includes('/') ? sourceModelId.split('/')[0]!.trim() : null,
+    scoresJson: JSON.stringify(scores),
+    priceJson: JSON.stringify(price),
+    contextWindow: null,
+    outputSpeed: null,
+    latencyMs: secondsPerCase !== null ? Math.round(secondsPerCase * 1000) : null,
+    sourceUrl: AIDER_LEADERBOARD_URL,
+    rawUnit: 'Aider polyglot pass rate',
+    rawPayloadJson: JSON.stringify({ lines: block, date }).slice(0, 20000),
+    fetchedAt: now,
+    updatedAt: now,
+  };
+}
+
+async function fetchAiderEntries(now: Date, region: ModelReferenceRegion): Promise<ModelReferenceEntryInsert[]> {
+  const res = await fetch(AIDER_LEADERBOARD_URL, {
+    headers: { accept: 'text/html', 'user-agent': 'ModelHarbor/0.1 model-reference-refresh' },
+  });
+  if (!res.ok) throw new Error(`Aider refresh failed: HTTP ${res.status}`);
+  const lines = stripHtmlToLines(await res.text());
+  const entries: ModelReferenceEntryInsert[] = [];
+  let block: string[] = [];
+  for (const line of lines) {
+    if (line.startsWith('Model : ') && block.length > 0) {
+      const entry = mapAiderBlock(block, now, region);
+      if (entry) entries.push(entry);
+      block = [];
+    }
+    if (
+      line.startsWith('Model : ') ||
+      line.startsWith('Command : ') ||
+      line.startsWith('Pass rate ') ||
+      line.startsWith('Percent cases well formed : ') ||
+      line.startsWith('Seconds per case : ') ||
+      line.startsWith('Total cost : ') ||
+      line.startsWith('Date : ')
+    ) {
+      block.push(line);
+    }
+  }
+  const finalEntry = mapAiderBlock(block, now, region);
+  if (finalEntry) entries.push(finalEntry);
+  const seen = new Set<string>();
+  return entries.filter((entry) => {
+    const key = entry.normalizedModelName;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function mapArtificialAnalysisBlock(
+  lines: string[],
+  index: number,
+  now: Date,
+  region: ModelReferenceRegion,
+): ModelReferenceEntryInsert | null {
+  const displayName = lines[index];
+  if (!displayName || displayName.length < 2) return null;
+  const context = lines[index + 1] ?? '';
+  const provider = lines[index + 2] ?? null;
+  const intelligence = parseNumber(lines[index + 3]);
+  const blendedPrice = parseNumber(lines[index + 4]);
+  if (intelligence === null || !provider || /^\$|--|\d/.test(displayName)) return null;
+  if (region === 'domestic' && !isDomesticReferenceModel(displayName, `${provider} ${displayName}`)) return null;
+  const contextMatch = context.match(/^(\d+(?:\.\d+)?)([kKmM])$/);
+  const contextWindow = contextMatch
+    ? Math.round(Number(contextMatch[1]) * (contextMatch[2]!.toLowerCase() === 'm' ? 1_000_000 : 1_000))
+    : null;
+  const normalized = normalizeModelName(displayName);
+  if (!normalized) return null;
+  const price: Record<string, number | string | boolean> = { source: 'artificial_analysis' };
+  if (blendedPrice !== null) price.blendedUsdPerMTok = blendedPrice;
+  return {
+    id: entryId(),
+    region,
+    source: 'artificial_analysis',
+    normalizedModelName: normalized,
+    sourceModelId: displayName,
+    displayName,
+    provider,
+    scoresJson: JSON.stringify({ intelligence }),
+    priceJson: JSON.stringify(price),
+    contextWindow,
+    outputSpeed: parseNumber(lines[index + 5]) ?? null,
+    latencyMs: null,
+    sourceUrl: ARTIFICIAL_ANALYSIS_URL,
+    rawUnit: 'Artificial Analysis Intelligence Index',
+    rawPayloadJson: JSON.stringify({ lines: lines.slice(index, index + 8) }).slice(0, 20000),
+    fetchedAt: now,
+    updatedAt: now,
+  };
+}
+
+async function fetchArtificialAnalysisEntries(
+  now: Date,
+  region: ModelReferenceRegion,
+): Promise<ModelReferenceEntryInsert[]> {
+  const res = await fetch(ARTIFICIAL_ANALYSIS_URL, {
+    headers: { accept: 'text/html', 'user-agent': 'ModelHarbor/0.1 model-reference-refresh' },
+  });
+  if (!res.ok) throw new Error(`Artificial Analysis refresh failed: HTTP ${res.status}`);
+  const lines = stripHtmlToLines(await res.text());
+  const entries: ModelReferenceEntryInsert[] = [];
+  for (let i = 0; i < lines.length - 6; i += 1) {
+    const entry = mapArtificialAnalysisBlock(lines, i, now, region);
+    if (entry) entries.push(entry);
+  }
+  const seen = new Set<string>();
+  return entries.filter((entry) => {
+    const key = entry.normalizedModelName;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+async function fetchReachabilityOnly(
+  now: Date,
+  region: ModelReferenceRegion,
+  source: Extract<ModelReferenceSource, 'arena' | 'opencompass' | 'superclue'>,
+): Promise<ModelReferenceEntryInsert[]> {
+  const url =
+    source === 'arena'
+      ? ARENA_LEADERBOARD_URL
+      : source === 'opencompass'
+        ? OPENCOMPASS_LEADERBOARD_URL
+        : SUPERCLUE_URL;
+  const res = await fetch(url, {
+    headers: { accept: 'text/html,application/json', 'user-agent': 'ModelHarbor/0.1 model-reference-refresh' },
+  });
+  if (!res.ok) throw new Error(`${source} refresh failed: HTTP ${res.status}`);
+  await res.text();
+  void now;
+  void region;
+  return [];
+}
+
+async function fetchReferenceEntriesForSource(
+  source: ModelReferenceSource,
+  now: Date,
+  region: ModelReferenceRegion,
+): Promise<ModelReferenceEntryInsert[]> {
+  if (source === 'openrouter') return await fetchOpenRouterEntries(now, region);
+  if (source === 'aider') return await fetchAiderEntries(now, region);
+  if (source === 'artificial_analysis') return await fetchArtificialAnalysisEntries(now, region);
+  if (source === 'arena' || source === 'opencompass' || source === 'superclue') {
+    return await fetchReachabilityOnly(now, region, source);
+  }
+  return [];
+}
+
 async function replaceReferenceEntries(
   db: Db,
   region: ModelReferenceRegion,
@@ -427,43 +692,55 @@ export async function refreshModelReference(
   db: Db,
   input: { region: ModelReferenceRegion; force?: boolean },
 ) {
-  const source = sourceForRegion(input.region);
-  const current = await ensureSyncStatus(db, input.region, source);
+  const sources = sourcesForRegion(input.region);
   const now = new Date();
-  if (!input.force && current.nextRefreshAfter && current.nextRefreshAfter > now) {
+  const statuses = await Promise.all(sources.map((source) => ensureSyncStatus(db, input.region, source)));
+  const dueStatuses = statuses.filter((status) => input.force || !status.nextRefreshAfter || status.nextRefreshAfter <= now);
+  if (dueStatuses.length === 0) {
     const items = await listReferenceEntries(db, { region: input.region });
-    return { refreshed: false, source, items };
+    return { refreshed: false, sources, items };
   }
-  await db
-    .update(modelReferenceSyncStatus)
-    .set({ status: 'refreshing', updatedAt: now, lastError: null })
-    .where(and(eq(modelReferenceSyncStatus.region, input.region), eq(modelReferenceSyncStatus.source, source)));
-  try {
-    const entries = await fetchOpenRouterEntries(now, input.region);
-    await replaceReferenceEntries(db, input.region, source, entries);
+
+  let successCount = 0;
+  const errors: string[] = [];
+  for (const current of dueStatuses) {
+    const source = current.source;
     await db
       .update(modelReferenceSyncStatus)
-      .set({
-        status: 'success',
-        lastRefreshAt: now,
-        nextRefreshAfter: new Date(now.getTime() + current.ttlMs),
-        lastError: null,
-        updatedAt: now,
-      })
+      .set({ status: 'refreshing', updatedAt: now, lastError: null })
       .where(and(eq(modelReferenceSyncStatus.region, input.region), eq(modelReferenceSyncStatus.source, source)));
-    const items = await listReferenceEntries(db, { region: input.region });
-    return { refreshed: true, source, items };
-  } catch (err) {
-    await db
-      .update(modelReferenceSyncStatus)
-      .set({
-        status: 'error',
-        lastError: err instanceof Error ? err.message : String(err),
-        updatedAt: new Date(),
-      })
-      .where(and(eq(modelReferenceSyncStatus.region, input.region), eq(modelReferenceSyncStatus.source, source)));
-    throw err;
+    try {
+      const entries = await fetchReferenceEntriesForSource(source, now, input.region);
+      await replaceReferenceEntries(db, input.region, source, entries);
+      await db
+        .update(modelReferenceSyncStatus)
+        .set({
+          status: 'success',
+          lastRefreshAt: now,
+          nextRefreshAfter: new Date(now.getTime() + current.ttlMs),
+          lastError: entries.length === 0 ? 'No structured rows parsed yet' : null,
+          updatedAt: now,
+        })
+        .where(and(eq(modelReferenceSyncStatus.region, input.region), eq(modelReferenceSyncStatus.source, source)));
+      successCount += 1;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      errors.push(`${source}: ${message}`);
+      await db
+        .update(modelReferenceSyncStatus)
+        .set({
+          status: 'error',
+          lastError: message,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(modelReferenceSyncStatus.region, input.region), eq(modelReferenceSyncStatus.source, source)));
+    }
   }
+  const items = await listReferenceEntries(db, { region: input.region });
+  if (successCount === 0 && errors.length > 0) {
+    throw new Error(errors.join('; '));
+  }
+  return { refreshed: successCount > 0, sources, items, errors };
 }
 
 export async function listReferenceEntries(
@@ -480,7 +757,7 @@ export async function listReferenceEntries(
     .where(eq(modelReferenceSyncStatus.region, input.region))
     .all();
   return {
-    items: rows.map(presentEntry),
+    items: input.source ? rows.map(presentEntry) : presentAggregatedEntries(rows),
     sync: statuses.map((s) => ({
       region: s.region,
       source: s.source,
@@ -528,48 +805,91 @@ export async function previewAutoGroupMembers(
   const publicByName = await publicModelMatchMap(db);
   const priceMax = Math.max(...refs.map(priceForScore).filter((v): v is number => v !== null), 0);
   const contextMax = Math.max(...refs.map((r) => r.contextWindow ?? 0), 0);
-  const bestByPublic = new Map<string, AutoGroupRecommendation>();
+  const aggregateByPublic = new Map<
+    string,
+    {
+      publicModel: Awaited<ReturnType<typeof publicModelMatchMap>> extends Map<string, infer T> ? T : never;
+      scores: Record<string, number>;
+      price: Record<string, unknown>;
+      priceValue: number | null;
+      contextWindow: number | null;
+      references: ModelReferenceEntryRow[];
+    }
+  >();
 
   for (const ref of refs) {
     const pm = publicByName.get(ref.normalizedModelName);
     if (!pm) continue;
     const scores = numericScores(ref);
-    const priceScore = normalizePrice(priceForScore(ref), priceMax);
-    const contextScore = normalizePositive(ref.contextWindow, contextMax);
+    const existing =
+      aggregateByPublic.get(pm.id) ??
+      ({
+        publicModel: pm,
+        scores: {},
+        price: {},
+        priceValue: null,
+        contextWindow: null,
+        references: [],
+      } as {
+        publicModel: typeof pm;
+        scores: Record<string, number>;
+        price: Record<string, unknown>;
+        priceValue: number | null;
+        contextWindow: number | null;
+        references: ModelReferenceEntryRow[];
+      });
+    for (const [key, value] of Object.entries(scores)) {
+      existing.scores[key] = Math.max(existing.scores[key] ?? 0, value);
+    }
+    const refPrice = priceForScore(ref);
+    if (refPrice !== null && (existing.priceValue === null || refPrice < existing.priceValue)) {
+      existing.priceValue = refPrice;
+      existing.price = parseJsonRecord(ref.priceJson);
+    }
+    if (ref.contextWindow !== null && ref.contextWindow > (existing.contextWindow ?? 0)) {
+      existing.contextWindow = ref.contextWindow;
+    }
+    existing.references.push(ref);
+    aggregateByPublic.set(pm.id, existing);
+  }
+
+  const recommendations: AutoGroupRecommendation[] = [];
+  for (const aggregate of aggregateByPublic.values()) {
+    const scores = aggregate.scores;
+    const priceScore = normalizePrice(aggregate.priceValue, priceMax);
+    const contextScore = normalizePositive(aggregate.contextWindow, contextMax);
     const score =
       scoreMetric(scores.intelligence) * weights.intelligence +
       scoreMetric(scores.reasoning) * weights.reasoning +
       scoreMetric(scores.coding) * weights.coding +
       scoreMetric(scores.agentic) * weights.agentic +
-      scoreMetric(scores.math) * weights.math +
-      scoreMetric(scores.creative) * weights.creative +
-      scoreMetric(scores.instruction) * weights.instruction +
       priceScore * weights.price +
       contextScore * weights.context;
+    const primaryRef =
+      aggregate.references.find((ref) => ref.source === 'openrouter') ??
+      aggregate.references.find((ref) => ref.source === 'artificial_analysis') ??
+      aggregate.references[0]!;
     const recommendation: AutoGroupRecommendation = {
-      publicModelId: pm.id,
-      publicModelName: pm.name,
-      displayName: pm.displayName,
+      publicModelId: aggregate.publicModel.id,
+      publicModelName: aggregate.publicModel.name,
+      displayName: aggregate.publicModel.displayName,
       score: Math.round(score * 100) / 100,
       reference: {
-        source: ref.source,
-        displayName: ref.displayName,
-        provider: ref.provider,
+        source: primaryRef.source,
+        displayName: primaryRef.displayName,
+        provider: primaryRef.provider,
         scores,
-        price: parseJsonRecord(ref.priceJson),
-        contextWindow: ref.contextWindow,
-        outputSpeed: ref.outputSpeed,
-        latencyMs: ref.latencyMs,
-        sourceUrl: ref.sourceUrl,
-        fetchedAt: ref.fetchedAt,
+        price: aggregate.price,
+        contextWindow: aggregate.contextWindow,
+        outputSpeed: primaryRef.outputSpeed,
+        latencyMs: primaryRef.latencyMs,
+        sourceUrl: primaryRef.sourceUrl,
+        fetchedAt: primaryRef.fetchedAt,
       },
     };
-    const existing = bestByPublic.get(pm.id);
-    if (!existing || recommendation.score > existing.score) {
-      bestByPublic.set(pm.id, recommendation);
-    }
+    recommendations.push(recommendation);
   }
-  return [...bestByPublic.values()]
+  return recommendations
     .sort((a, b) => b.score - a.score || a.publicModelName.localeCompare(b.publicModelName))
     .slice(0, topN);
 }
