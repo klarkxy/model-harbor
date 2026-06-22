@@ -46,7 +46,7 @@ ModelHarbor is a lightweight, dashboard-first LLM API router. It helps administr
 
 ### Requirements
 
-- Node.js >= 20.10.0
+- Node.js >= 22.10.0
 - pnpm >= 9
 
 ### Install & Run
@@ -134,10 +134,11 @@ e2e/           Playwright end-to-end tests
 | `MODELHARBOR_ADMIN_DISPLAY_NAME` | `Admin`                 | First admin display name            |
 | `MODELHARBOR_LOG_LEVEL`      | `info`                      | Log level                           |
 | `MODELHARBOR_LOG_FILE`       | `./logs/app.log`            | File log path                       |
+| `MODELHARBOR_TRUST_PROXY`    | unset                       | Fastify `trustProxy` (e.g. `loopback`, `true`, CIDR list) |
 | `MODELHARBOR_SERVE_WEB`      | unset                       | Set `1` to serve the built dashboard outside production mode |
 | `NODE_ENV`                   | `development`               | Set `production` to enable production checks and serve the built dashboard |
 
-> **Production note:** The default secret exists only for local development. Change `MODELHARBOR_SECRET_KEY` and `MODELHARBOR_ADMIN_PASSWORD` before exposing the service; production mode rejects the default values. If `SECRET_KEY` is lost, encrypted upstream keys cannot be recovered.
+> **Production note:** The default secret exists only for local development. Change `MODELHARBOR_SECRET_KEY`, `MODELHARBOR_ADMIN_PASSWORD` **and** `MODELHARBOR_ADMIN_USERNAME` before exposing the service; production mode rejects the default values. If `SECRET_KEY` is lost, encrypted upstream keys cannot be recovered.
 
 ---
 

@@ -46,7 +46,7 @@ ModelHarbor（模型港）是一个轻量级、以仪表盘为核心的 LLM API 
 
 ### 环境要求
 
-- Node.js >= 20.10.0
+- Node.js >= 22.10.0
 - pnpm >= 9
 
 ### 安装并运行
@@ -134,10 +134,11 @@ e2e/           Playwright 端到端测试
 | `MODELHARBOR_ADMIN_DISPLAY_NAME` | `Admin`                 | 首个管理员展示名  |
 | `MODELHARBOR_LOG_LEVEL`      | `info`                      | 日志级别          |
 | `MODELHARBOR_LOG_FILE`       | `./logs/app.log`            | 文件日志路径      |
+| `MODELHARBOR_TRUST_PROXY`    | 未设置                      | Fastify `trustProxy`（如 `loopback`、`true`、CIDR 列表） |
 | `MODELHARBOR_SERVE_WEB`      | 未设置                      | 非生产模式下设为 `1` 可由 API 进程托管已构建的前端 |
 | `NODE_ENV`                   | `development`               | 设为 `production` 时启用生产校验并托管已构建的前端 |
 
-> **生产环境注意：** 默认 secret 仅用于本地开发。在暴露服务前，务必修改 `MODELHARBOR_SECRET_KEY` 和 `MODELHARBOR_ADMIN_PASSWORD`；生产模式会拒绝默认值。如果 `SECRET_KEY` 丢失，加密的上游密钥将无法恢复。
+> **生产环境注意：** 默认 secret 仅用于本地开发。在暴露服务前，务必同时修改 `MODELHARBOR_SECRET_KEY`、`MODELHARBOR_ADMIN_PASSWORD` 和 `MODELHARBOR_ADMIN_USERNAME`；生产模式会拒绝默认值。如果 `SECRET_KEY` 丢失，加密的上游密钥将无法恢复。
 
 ---
 

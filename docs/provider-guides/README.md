@@ -11,6 +11,7 @@
 | OpenAI | `openai` | PAT | [openai.md](../../apps/web/public/docs/provider-guides/openai.md) |
 | Anthropic | `anthropic` | PAT | [anthropic.md](../../apps/web/public/docs/provider-guides/anthropic.md) |
 | Coze（扣子） | `coze` | OAuth JWT | [coze.md](../../apps/web/public/docs/provider-guides/coze.md) |
+| Codex | `codex` | OAuth | [codex.md](../../apps/web/public/docs/provider-guides/codex.md) |
 | DeepSeek | `deepseek` | PAT | [deepseek.md](../../apps/web/public/docs/provider-guides/deepseek.md) |
 | Moonshot (Kimi)（国际） | `moonshot` | PAT | [moonshot.md](../../apps/web/public/docs/provider-guides/moonshot.md) |
 | Moonshot (Kimi)（国内） | `moonshot-cn` | PAT | [moonshot-cn.md](../../apps/web/public/docs/provider-guides/moonshot-cn.md) |

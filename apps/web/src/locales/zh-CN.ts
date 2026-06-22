@@ -95,6 +95,7 @@ const messages: Messages = {
   },
   layout: {
     brand: 'ModelHarbor',
+    sub: '模型路由网关',
     version: 'v0.1.0 · M1 就绪',
     menu: {
       overview: '概览',

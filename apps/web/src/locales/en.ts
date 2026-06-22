@@ -93,6 +93,7 @@ const messages = {
   },
   layout: {
     brand: 'ModelHarbor',
+    sub: 'model router',
     version: 'v0.1.0 · M1 ready',
     menu: {
       overview: 'Overview',

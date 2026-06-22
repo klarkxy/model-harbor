@@ -116,7 +116,7 @@ const languageOptions = computed(() =>
         </span>
         <span v-if="!collapsed" class="logo__text">
           <NText strong class="logo__name">{{ t('layout.brand') }}</NText>
-          <NText depth="3" class="logo__sub">model router</NText>
+          <NText depth="3" class="logo__sub">{{ t('layout.sub') }}</NText>
         </span>
       </div>
       <NMenu
