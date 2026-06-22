@@ -22,9 +22,14 @@ export type AutoGroupPreset = (typeof AUTO_GROUP_PRESETS)[number];
 
 export interface AutoGroupWeights {
   intelligence?: number;
+  chat?: number;
+  knowledge?: number;
+  math?: number;
+  chinese?: number;
   coding?: number;
   agentic?: number;
   reasoning?: number;
+  costEfficiency?: number;
   price?: number;
   context?: number;
 }
@@ -71,43 +76,68 @@ const DOMESTIC_OPENROUTER_PROVIDERS = [
 
 const PRESET_WEIGHTS: Record<AutoGroupPreset, Required<AutoGroupWeights>> = {
   balanced: {
-    intelligence: 0.34,
-    reasoning: 0.18,
-    coding: 0.2,
-    agentic: 0.16,
-    price: 0.1,
+    intelligence: 0.22,
+    chat: 0.12,
+    knowledge: 0.1,
+    math: 0.08,
+    chinese: 0.08,
+    reasoning: 0.12,
+    coding: 0.14,
+    agentic: 0.08,
+    costEfficiency: 0.04,
+    price: 0.02,
     context: 0.02,
   },
   chat: {
-    intelligence: 0.54,
-    reasoning: 0.16,
+    intelligence: 0.26,
+    chat: 0.34,
+    knowledge: 0.08,
+    math: 0.02,
+    chinese: 0.12,
+    reasoning: 0.08,
     coding: 0.04,
-    agentic: 0.16,
-    price: 0.08,
+    agentic: 0.02,
+    costEfficiency: 0.02,
+    price: 0.02,
     context: 0.02,
   },
   code: {
-    intelligence: 0.12,
-    reasoning: 0.14,
-    coding: 0.58,
+    intelligence: 0.08,
+    chat: 0.02,
+    knowledge: 0.04,
+    math: 0.06,
+    chinese: 0.02,
+    reasoning: 0.12,
+    coding: 0.56,
     agentic: 0.12,
-    price: 0.03,
+    costEfficiency: 0.04,
+    price: 0.02,
     context: 0.01,
   },
   plan: {
-    intelligence: 0.22,
-    reasoning: 0.32,
+    intelligence: 0.18,
+    chat: 0.08,
+    knowledge: 0.12,
+    math: 0.08,
+    chinese: 0.04,
+    reasoning: 0.24,
     coding: 0.08,
-    agentic: 0.32,
-    price: 0.04,
+    agentic: 0.14,
+    costEfficiency: 0.02,
+    price: 0.02,
     context: 0.02,
   },
   cheap: {
-    intelligence: 0.14,
-    reasoning: 0.08,
-    coding: 0.08,
-    agentic: 0.06,
-    price: 0.62,
+    intelligence: 0.08,
+    chat: 0.04,
+    knowledge: 0.04,
+    math: 0.02,
+    chinese: 0.04,
+    reasoning: 0.04,
+    coding: 0.04,
+    agentic: 0.02,
+    costEfficiency: 0.48,
+    price: 0.18,
     context: 0.02,
   },
 };
@@ -195,9 +225,14 @@ function coerceWeights(preset: AutoGroupPreset, weights: unknown): Required<Auto
   const next = hasExplicitWeight
     ? {
         intelligence: 0,
+        chat: 0,
+        knowledge: 0,
+        math: 0,
+        chinese: 0,
         reasoning: 0,
         coding: 0,
         agentic: 0,
+        costEfficiency: 0,
         price: 0,
         context: 0,
       }
@@ -358,9 +393,10 @@ function collectOpenRouterScores(artificial: Record<string, unknown>): Record<st
     ['coding', ['coding', 'coding_index', 'code']],
     ['agentic', ['agentic', 'agentic_index', 'agent']],
     ['reasoning', ['reasoning', 'reasoning_index', 'analysis']],
+    ['chat', ['chat', 'arena', 'preference', 'conversation']],
+    ['knowledge', ['knowledge', 'mmlu', 'humanities', 'science']],
     ['math', ['math', 'math_index', 'mathematics']],
-    ['creative', ['creative', 'creativity', 'writing']],
-    ['instruction', ['instruction', 'instruction_following', 'if']],
+    ['chinese', ['chinese', 'ceval', 'cmmlu', 'clue']],
   ];
   for (const [target, candidates] of aliasPairs) {
     if (typeof scores[target] === 'number') continue;
@@ -369,6 +405,9 @@ function collectOpenRouterScores(artificial: Record<string, unknown>): Record<st
   }
   if (typeof scores.reasoning !== 'number' && typeof scores.intelligence === 'number') {
     scores.reasoning = scores.intelligence;
+  }
+  if (typeof scores.knowledge !== 'number' && typeof scores.intelligence === 'number') {
+    scores.knowledge = scores.intelligence;
   }
   return scores;
 }
@@ -857,12 +896,20 @@ export async function previewAutoGroupMembers(
   for (const aggregate of aggregateByPublic.values()) {
     const scores = aggregate.scores;
     const priceScore = normalizePrice(aggregate.priceValue, priceMax);
+    if (aggregate.priceValue !== null) {
+      scores.costEfficiency = Math.max(scores.costEfficiency ?? 0, priceScore);
+    }
     const contextScore = normalizePositive(aggregate.contextWindow, contextMax);
     const score =
       scoreMetric(scores.intelligence) * weights.intelligence +
+      scoreMetric(scores.chat) * weights.chat +
+      scoreMetric(scores.knowledge) * weights.knowledge +
+      scoreMetric(scores.math) * weights.math +
+      scoreMetric(scores.chinese) * weights.chinese +
       scoreMetric(scores.reasoning) * weights.reasoning +
       scoreMetric(scores.coding) * weights.coding +
       scoreMetric(scores.agentic) * weights.agentic +
+      scoreMetric(scores.costEfficiency) * weights.costEfficiency +
       priceScore * weights.price +
       contextScore * weights.context;
     const primaryRef =

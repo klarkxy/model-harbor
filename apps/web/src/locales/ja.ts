@@ -253,6 +253,7 @@ const messages = {
       displayName: '表示名',
       policy: 'ポリシー',
       members: 'メンバー',
+      dragHandle: 'ドラッグして並べ替え',
       status: '状態',
       actions: 'アクション',
     },

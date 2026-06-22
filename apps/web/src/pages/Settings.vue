@@ -341,9 +341,14 @@ const autoPresetOptions = computed(() => [
 
 const autoWeightKeys = [
   'intelligence',
+  'chat',
+  'knowledge',
+  'math',
+  'chinese',
   'reasoning',
   'coding',
   'agentic',
+  'costEfficiency',
   'price',
   'context',
 ] as const;

@@ -252,6 +252,7 @@ const messages = {
       displayName: '顯示名稱',
       policy: '策略',
       members: '成員',
+      dragHandle: '拖動排序',
       status: '狀態',
       actions: '操作',
     },

@@ -253,6 +253,7 @@ const messages = {
       displayName: 'Nome de exibição',
       policy: 'Política',
       members: 'Membros',
+      dragHandle: 'Arraste para reordenar',
       status: 'Status',
       actions: 'Ações',
     },

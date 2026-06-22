@@ -124,6 +124,49 @@ function removeMember(idx: number) {
   memberRows.value.splice(idx, 1);
 }
 
+function clearMemberDragState() {
+  draggingIndex.value = null;
+  dragOverIndex.value = null;
+  dragOverPosition.value = 'before';
+}
+
+function reorderMember(fromIndex: number, targetIndex: number, position: 'before' | 'after') {
+  if (fromIndex === targetIndex) return;
+  const copy = [...memberRows.value];
+  const [moved] = copy.splice(fromIndex, 1);
+  if (!moved) return;
+  let insertIndex = targetIndex + (position === 'after' ? 1 : 0);
+  if (fromIndex < insertIndex) insertIndex -= 1;
+  insertIndex = Math.max(0, Math.min(copy.length, insertIndex));
+  copy.splice(insertIndex, 0, moved);
+  memberRows.value = copy;
+}
+
+function memberRowProps(_row: unknown, idx: number) {
+  const classes: string[] = [];
+  if (draggingIndex.value === idx) classes.push('member-dragging');
+  if (dragOverIndex.value === idx) classes.push(`member-drop-${dragOverPosition.value}`);
+  return {
+    class: classes.join(' '),
+    onDragover: (event: DragEvent) => {
+      if (draggingIndex.value === null) return;
+      event.preventDefault();
+      const target = event.currentTarget as HTMLElement;
+      const rect = target.getBoundingClientRect();
+      dragOverIndex.value = idx;
+      dragOverPosition.value = event.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+    },
+    onDrop: (event: DragEvent) => {
+      event.preventDefault();
+      if (draggingIndex.value !== null) {
+        reorderMember(draggingIndex.value, idx, dragOverPosition.value);
+      }
+      clearMemberDragState();
+    },
+    onDragend: clearMemberDragState,
+  };
+}
+
 async function onSubmit() {
   if (!form.value.name) {
     message.error(t('modelGroups.validation.required'));
@@ -329,9 +372,6 @@ const previewColumns = computed<DataTableColumns<AutoGroupRecommendation>>(() =>
           <NFormItem :label="t('modelGroups.drawer.description')">
             <NInput v-model:value="form.description" type="textarea" :rows="2" />
           </NFormItem>
-          <NFormItem :label="t('modelGroups.drawer.routingPolicy')">
-            <NSelect v-model:value="form.routingPolicy" :options="policyOptions" />
-          </NFormItem>
           <NFormItem :label="t('modelGroups.drawer.mode')">
             <NSelect v-model:value="form.mode" :options="modeOptions" />
           </NFormItem>
@@ -365,20 +405,31 @@ const previewColumns = computed<DataTableColumns<AutoGroupRecommendation>>(() =>
               <div
                 v-for="(m, idx) in memberRows"
                 :key="idx"
-                style="display: flex; gap: 8px; align-items: center"
+                class="member-row"
+                :class="{
+                  'member-dragging': draggingIndex === idx,
+                  [`member-drop-${dragOverPosition}`]: dragOverIndex === idx,
+                }"
+                v-bind="memberRowProps(m, idx)"
               >
+                <div
+                  class="order-handle"
+                  draggable="true"
+                  :title="t('modelGroups.drawer.dragHandle')"
+                  @dragstart="(event: DragEvent) => {
+                    draggingIndex = idx;
+                    event.dataTransfer?.setData('text/plain', String(idx));
+                    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+                  }"
+                  @dragend="clearMemberDragState"
+                >
+                  <span class="order-grip" aria-hidden="true" />
+                </div>
                 <NSelect
                   v-model:value="m.publicModelId"
                   :options="modelOptions"
                   style="flex: 1"
                   :placeholder="t('modelGroups.drawer.placeholders.publicModel')"
-                />
-                <NInputNumber v-model:value="m.priority" :min="0" style="width: 90px" />
-                <NInputNumber
-                  v-model:value="m.weight"
-                  :min="0"
-                  :placeholder="t('modelGroups.drawer.weight')"
-                  style="width: 90px"
                 />
                 <NButton size="small" type="error" tertiary @click="removeMember(idx)">×</NButton>
               </div>
@@ -405,5 +456,23 @@ const previewColumns = computed<DataTableColumns<AutoGroupRecommendation>>(() =>
 .page {
   max-width: 1200px;
   margin: 0 auto;
+}
+
+.member-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.member-dragging {
+  opacity: 0.55;
+}
+
+.member-drop-before {
+  box-shadow: inset 0 2px 0 #2f7cf6;
+}
+
+.member-drop-after {
+  box-shadow: inset 0 -2px 0 #2f7cf6;
 }
 </style>

@@ -253,6 +253,7 @@ const messages = {
       displayName: 'Отображаемое имя',
       policy: 'Политика',
       members: 'Участники',
+      dragHandle: 'Перетащите для сортировки',
       status: 'Статус',
       actions: 'Действия',
     },

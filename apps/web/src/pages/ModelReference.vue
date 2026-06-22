@@ -39,6 +39,18 @@ const regionOptions = computed(() => [
   { label: t('modelGroups.drawer.regions.domestic'), value: 'domestic' },
 ]);
 
+const preferredScoreKeys = [
+  'intelligence',
+  'chat',
+  'knowledge',
+  'math',
+  'chinese',
+  'reasoning',
+  'coding',
+  'agentic',
+  'costEfficiency',
+] as const;
+
 function fmtDate(value: string | null): string {
   return value ? new Date(value).toLocaleString() : '-';
 }
@@ -125,6 +137,20 @@ function scoreColumn(key: string, width: number) {
     sortOrder: sortState.value?.columnKey === key ? sortState.value.order : false,
   };
 }
+
+const scoreKeys = computed(() => {
+  const keys = new Set<string>();
+  for (const item of items.value) {
+    for (const [key, value] of Object.entries(item.scores)) {
+      if (typeof value === 'number' && Number.isFinite(value)) keys.add(key);
+    }
+  }
+  const preferred = preferredScoreKeys.filter((key) => keys.has(key));
+  const extra = [...keys]
+    .filter((key) => !preferredScoreKeys.includes(key as (typeof preferredScoreKeys)[number]))
+    .sort((a, b) => a.localeCompare(b));
+  return [...preferred, ...extra];
+});
 
 async function refreshList(): Promise<void> {
   loading.value = true;
@@ -219,10 +245,7 @@ const columns = computed<DataTableColumns<ModelReferenceEntry>>(() => [
     sorter: true,
     sortOrder: sortState.value?.columnKey === 'provider' ? sortState.value.order : false,
   },
-  scoreColumn('intelligence', 100),
-  scoreColumn('reasoning', 100),
-  scoreColumn('coding', 90),
-  scoreColumn('agentic', 90),
+  ...scoreKeys.value.map((key) => scoreColumn(key, key === 'costEfficiency' ? 120 : 100)),
   {
     title: t('modelReference.columns.price'),
     key: 'price',

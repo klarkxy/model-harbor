@@ -253,6 +253,7 @@ const messages = {
       displayName: 'Anzeigename',
       policy: 'Richtlinie',
       members: 'Mitglieder',
+      dragHandle: 'Zum Sortieren ziehen',
       status: 'Status',
       actions: 'Aktionen',
     },

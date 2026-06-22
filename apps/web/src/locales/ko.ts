@@ -253,6 +253,7 @@ const messages = {
       displayName: '표시 이름',
       policy: '정책',
       members: '구성원',
+      dragHandle: '드래그하여 재정렬',
       status: '상태',
       actions: '작업',
     },
