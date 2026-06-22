@@ -87,7 +87,8 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
           };
         })();
 
-  const app = Fastify({ logger });
+  const trustProxy = parseTrustProxy(env.TRUST_PROXY);
+  const app = Fastify({ logger, trustProxy });
 
   // Wrap the app logger so structured fields that look like secrets (auth
   // headers, bearer tokens, mh_/sk- prefixed strings) are redacted before
@@ -189,4 +190,25 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
   }
 
   return app;
+}
+
+/**
+ * Translate the `MODELHARBOR_TRUST_PROXY` env value into the shape Fastify
+ * expects on its `trustProxy` option.
+ *
+ *   ""        → false (trust nothing; direct bind only)
+ *   "true"    → true  (trust every hop)
+ *   "1" / "0" → boolean number
+ *   "loopback" / "linklocal" / "uniquelocal" → preset string (Fastify
+ *     passes these through to find-my-way)
+ *   anything else is treated as a comma-separated CIDR / IP list.
+ */
+function parseTrustProxy(raw: string): boolean | number | string {
+  const trimmed = raw.trim();
+  if (trimmed === '') return false;
+  if (trimmed === 'true') return true;
+  if (trimmed === 'false') return false;
+  if (/^\d+$/.test(trimmed)) return Number(trimmed);
+  if (trimmed.includes('/') || trimmed.includes('.')) return trimmed;
+  return trimmed;
 }

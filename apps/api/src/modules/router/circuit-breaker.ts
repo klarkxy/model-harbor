@@ -136,7 +136,9 @@ export async function updateCircuitBreakerSettings(
     values.endpointHealthProbeDegradedLatencyMs = Math.max(1_000, Math.round(input.endpointHealthProbeDegradedLatencyMs));
   }
   if (typeof input.firstTokenTimeoutMs === 'number') {
-    values.firstTokenTimeoutMs = Math.max(0, Math.min(300_000, Math.round(input.firstTokenTimeoutMs)));
+    // 0 would self-DoS: every streaming request times out immediately and
+    // the candidate is cooled for 15s. Floor at 1s.
+    values.firstTokenTimeoutMs = Math.max(1_000, Math.min(300_000, Math.round(input.firstTokenTimeoutMs)));
   }
 
   await db

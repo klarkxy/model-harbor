@@ -103,6 +103,11 @@ export interface GatewayError {
 export type GatewayOutcome = GatewaySuccess | GatewayError;
 
 const DEFAULT_UPSTREAM_TIMEOUT_MS = 60_000;
+// Cap the per-request failover fan-out. Even with a long candidate list
+// and a global outage, a single request should not pay N sequential
+// upstream latencies. 8 covers most realistic multi-region setups while
+// keeping a 1-minute default upstream budget at 7-8s per attempt.
+const MAX_FAILOVER_ATTEMPTS = 8;
 const FAILOVER_CATEGORIES: ReadonlySet<NormalizedProviderError['category']> = new Set([
   'provider_rate_limit',
   'provider_quota',
@@ -137,6 +142,13 @@ async function tryCandidates(
   for (const candidate of args.candidates) {
     lastCandidate = candidate;
     attempts += 1;
+    if (attempts > MAX_FAILOVER_ATTEMPTS) {
+      // Cap the fan-out per request. We stop walking the candidate list and
+      // surface the most recent failover-eligible error to the caller.
+      // Subsequent requests will benefit from the cooldown we just applied
+      // to the candidates we did try, so they skip them automatically.
+      break;
+    }
     await args.log({
       step: 'candidate_attempt',
       upstreamKeyId: candidate.upstreamKeyId,
@@ -329,6 +341,12 @@ function classifyOutcome(
 // Re-build a ProviderRequestContext from a request that was already sent. The
 // sender doesn't carry the context (it only sees the wire-format request), so
 // the gateway reconstructs the minimum needed for adapter helpers.
+//
+// This is a best-effort stub used by `normalizeError` and `normalizeResponse`
+// on the response / failure path; the IR fields are blank because the
+// original IR has already been flattened into the wire-format body in
+// `request.body`. Adapter code that walks `context.ir` on the request build
+// path is not reachable from this stub.
 function requestToContext(request: ProviderHttpRequest): ProviderRequestContext {
   return {
     ir: {
@@ -339,7 +357,7 @@ function requestToContext(request: ProviderHttpRequest): ProviderRequestContext 
       maxTokens: null,
       temperature: null,
       topP: null,
-      stream: request.method === 'POST' ? false : false,
+      stream: false,
       metadata: {},
       rawRequest: null,
     },

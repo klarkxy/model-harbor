@@ -13,7 +13,7 @@
 // M7 dashboard will use to compute the sticky hit rate.
 
 import { createHash } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { generateId } from '@modelharbor/shared';
 import type { Db } from '../db/index.js';
 import { type StickyBindingRow, stickyBindings } from '../db/tables/routing.js';
@@ -112,13 +112,54 @@ export interface StickyUpsertInput {
 
 // Create a new binding or update the existing one for this tuple. Bumps the
 // hit counter and sliding expiresAt. Best-effort: never throws.
+//
+// The upsert is a single INSERT ... ON CONFLICT DO UPDATE statement so the
+// hit counter increments atomically (the previous read-then-update pattern
+// lost increments under bursty concurrent writes for the same tuple).
 export async function upsertStickyBinding(
   db: Db,
   args: StickyUpsertInput,
 ): Promise<StickyBindingRow | null> {
   try {
     const ttl = args.ttlMs ?? DEFAULT_STICKY_TTL_MS;
-    const existing = await db
+    const id = generateId('stickyBinding');
+    const expires = new Date(args.now.getTime() + ttl);
+    await db
+      .insert(stickyBindings)
+      .values({
+        id,
+        appId: args.appId,
+        consumerKeyId: args.consumerKeyId,
+        requestedTargetName: args.requestedTargetName,
+        conversationFingerprint: args.fingerprint,
+        upstreamKeyId: args.upstreamKeyId,
+        realModelName: args.realModelName,
+        hitCount: 1,
+        lastUsedAt: args.now,
+        expiresAt: expires,
+        createdAt: args.now,
+        updatedAt: args.now,
+      })
+      .onConflictDoUpdate({
+        target: [
+          stickyBindings.appId,
+          stickyBindings.consumerKeyId,
+          stickyBindings.requestedTargetName,
+          stickyBindings.conversationFingerprint,
+        ],
+        set: {
+          upstreamKeyId: args.upstreamKeyId,
+          realModelName: args.realModelName,
+          hitCount: sql`${stickyBindings.hitCount} + 1`,
+          lastUsedAt: args.now,
+          expiresAt: expires,
+          updatedAt: args.now,
+        },
+      });
+
+    // Re-read the persisted row so the caller sees the authoritative
+    // post-upsert hit count instead of the optimistic value we wrote.
+    const row = await db
       .select()
       .from(stickyBindings)
       .where(
@@ -130,60 +171,7 @@ export async function upsertStickyBinding(
         ),
       )
       .get();
-    if (existing) {
-      const newHit = existing.hitCount + 1;
-      const newExpires = new Date(args.now.getTime() + ttl);
-      await db
-        .update(stickyBindings)
-        .set({
-          upstreamKeyId: args.upstreamKeyId,
-          realModelName: args.realModelName,
-          hitCount: newHit,
-          lastUsedAt: args.now,
-          expiresAt: newExpires,
-          updatedAt: args.now,
-        })
-        .where(eq(stickyBindings.id, existing.id));
-      return {
-        ...existing,
-        upstreamKeyId: args.upstreamKeyId,
-        realModelName: args.realModelName,
-        hitCount: newHit,
-        lastUsedAt: args.now,
-        expiresAt: newExpires,
-        updatedAt: args.now,
-      };
-    }
-    const id = generateId('stickyBinding');
-    const expires = new Date(args.now.getTime() + ttl);
-    await db.insert(stickyBindings).values({
-      id,
-      appId: args.appId,
-      consumerKeyId: args.consumerKeyId,
-      requestedTargetName: args.requestedTargetName,
-      conversationFingerprint: args.fingerprint,
-      upstreamKeyId: args.upstreamKeyId,
-      realModelName: args.realModelName,
-      hitCount: 1,
-      lastUsedAt: args.now,
-      expiresAt: expires,
-      createdAt: args.now,
-      updatedAt: args.now,
-    });
-    return {
-      id,
-      appId: args.appId,
-      consumerKeyId: args.consumerKeyId,
-      requestedTargetName: args.requestedTargetName,
-      conversationFingerprint: args.fingerprint,
-      upstreamKeyId: args.upstreamKeyId,
-      realModelName: args.realModelName,
-      hitCount: 1,
-      lastUsedAt: args.now,
-      expiresAt: expires,
-      createdAt: args.now,
-      updatedAt: args.now,
-    };
+    return row ?? null;
   } catch {
     return null;
   }
@@ -191,29 +179,29 @@ export async function upsertStickyBinding(
 
 // Touch only the hit counter and expiresAt. Used when the router honors an
 // existing binding without changing which upstream it points to.
+//
+// The increment is a single UPDATE ... SET hitCount = hitCount + 1, so two
+// concurrent touches cannot lose increments the way the previous
+// read-then-write pattern could.
 export async function touchStickyBinding(
   db: Db,
   args: { id: string; now: Date; ttlMs?: number },
 ): Promise<void> {
   try {
     const ttl = args.ttlMs ?? DEFAULT_STICKY_TTL_MS;
+    const expires = new Date(args.now.getTime() + ttl);
     await db
       .update(stickyBindings)
       .set({
-        hitCount: (await getHitCount(db, args.id)) + 1,
+        hitCount: sql`${stickyBindings.hitCount} + 1`,
         lastUsedAt: args.now,
-        expiresAt: new Date(args.now.getTime() + ttl),
+        expiresAt: expires,
         updatedAt: args.now,
       })
       .where(eq(stickyBindings.id, args.id));
   } catch {
     /* ignore */
   }
-}
-
-async function getHitCount(db: Db, id: string): Promise<number> {
-  const row = await db.select().from(stickyBindings).where(eq(stickyBindings.id, id)).get();
-  return row?.hitCount ?? 0;
 }
 
 // Drop expired bindings. Called by the jobs runner. Returns the number removed.
