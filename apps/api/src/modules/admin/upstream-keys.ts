@@ -842,6 +842,11 @@ export function registerUpstreamKeyRoutes(app: FastifyInstance, deps: UpstreamKe
     }
     const ids = body.ids as string[];
     const now = new Date();
+    // Single transaction wrapping both the upstream key reorder and the
+    // candidate priority refresh. libSQL serialises writers at the connection
+    // level, so splitting the work across N+1 transactions made every drag
+    // round-trip stall on commit latency. Doing it all in one tx drops the
+    // wall time from O(M) commits to a single commit.
     await db.transaction(async (tx) => {
       for (let idx = 0; idx < ids.length; idx += 1) {
         await tx
@@ -849,15 +854,15 @@ export function registerUpstreamKeyRoutes(app: FastifyInstance, deps: UpstreamKe
           .set({ displayOrder: (idx + 1) * 10, updatedAt: now })
           .where(eq(upstreamKeys.id, ids[idx]!));
       }
+      const defaultModels = await tx
+        .select({ id: publicModels.id })
+        .from(publicModels)
+        .where(eq(publicModels.candidateOrderCustomized, false))
+        .all();
+      for (const model of defaultModels) {
+        await resetPublicModelCandidateOrder(tx as unknown as Db, model.id, false);
+      }
     });
-    const defaultModels = await db
-      .select({ id: publicModels.id })
-      .from(publicModels)
-      .where(eq(publicModels.candidateOrderCustomized, false))
-      .all();
-    for (const model of defaultModels) {
-      await resetPublicModelCandidateOrder(db, model.id, false);
-    }
     return { ids };
   });
 

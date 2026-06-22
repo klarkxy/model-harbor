@@ -1021,14 +1021,14 @@ const columns = computed<DataTableColumns<UpstreamKey>>(() => [
       h(
         'div',
         {
-          class: ['order-handle', { 'order-handle--disabled': upstreamDrag.inFlight }],
-          draggable: !upstreamDrag.inFlight,
-          title: upstreamDrag.inFlight
+          class: ['order-handle', { 'order-handle--disabled': upstreamDrag.inFlight.value }],
+          draggable: !upstreamDrag.inFlight.value,
+          title: upstreamDrag.inFlight.value
             ? t('upstreamKeys.actions.dragBusy')
             : t('upstreamKeys.actions.drag'),
           'data-testid': 'upstream-order-handle',
           onDragstart: (event: DragEvent) => {
-            if (upstreamDrag.inFlight) {
+            if (upstreamDrag.inFlight.value) {
               event.preventDefault();
               return;
             }

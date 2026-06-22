@@ -60,13 +60,17 @@ export function useDraggableList<T>(
   });
 
   /**
-   * Guard against stacking reorder requests. Two rapid drags on a slow
-   * network would otherwise let the slower request's rollback clobber the
-   * faster request's committed state. We drop the new commit entirely while
-   * a previous `onReorder` promise is still pending — the user can simply
-   * drag again once the first request resolves.
+   * Guard against stacking reorder requests. Instead of dropping subsequent
+   * drops while a save is in flight (which made the table feel "locked"), we
+   * remember the latest pending commit and replay it as soon as the in-flight
+   * one settles. If the user drags several times in a row, the intermediate
+   * orderings are subsumed by the latest one — only the final commit is sent.
+   * This keeps the UI snappy without the dropped-commit footgun (a dropped
+   * commit leaves the table out of sync with the server until the next
+   * reload).
    */
   const inFlight = ref(false);
+  let pendingCommit: { copy: T[]; previous: T[] } | null = null;
 
   function clear(): void {
     state.draggingIndex = null;
@@ -78,20 +82,36 @@ export function useDraggableList<T>(
     state.draggingIndex = idx;
   }
 
+  function dispatchCommit(): void {
+    if (inFlight.value || !pendingCommit) return;
+    const next = pendingCommit;
+    pendingCommit = null;
+    inFlight.value = true;
+    void Promise.resolve(onReorder(next.copy, next.previous))
+      .catch(() => {
+        // If the consumer's onReorder rejected after already mutating
+        // `items` itself, nothing to do. If it didn't, the consumer is
+        // expected to roll back; we still leave `items` as the optimistic
+        // value so the UI stays consistent with the caller's intent.
+      })
+      .finally(() => {
+        inFlight.value = false;
+        // Drain any drop that arrived while we were saving so the table
+        // doesn't drift away from the server's authoritative state.
+        if (pendingCommit) dispatchCommit();
+      });
+  }
+
   function commit(from: number, to: number, pos: 'before' | 'after'): void {
     if (from === to) {
       clear();
       return;
     }
-    if (inFlight.value) {
-      // Another reorder is still in flight; ignore this drop. The dragend
-      // handler will fire `clear()` and the user can retry once the prior
-      // save settles.
-      clear();
-      return;
-    }
     // Capture the snapshot BEFORE mutating `items` so consumers can roll
-    // back to the exact pre-commit state on failure.
+    // back to the exact pre-commit state on failure. The snapshot is the
+    // *current* `items` value, which already reflects any earlier in-flight
+    // optimistic update — that's fine because rollback only matters relative
+    // to what the user is seeing right now.
     const previous = items.value.slice();
     const copy = [...items.value];
     const [moved] = copy.splice(from, 1);
@@ -105,17 +125,10 @@ export function useDraggableList<T>(
     insertAt = Math.max(0, Math.min(copy.length, insertAt));
     copy.splice(insertAt, 0, moved);
     items.value = copy;
-    inFlight.value = true;
-    void Promise.resolve(onReorder(copy, previous))
-      .catch(() => {
-        // If the consumer's onReorder rejected after already mutating
-        // `items` itself, nothing to do. If it didn't, the consumer is
-        // expected to roll back; we still leave `items` as the optimistic
-        // value so the UI stays consistent with the caller's intent.
-      })
-      .finally(() => {
-        inFlight.value = false;
-      });
+    // Overwrite any earlier queued commit so consecutive drags collapse to
+    // the latest order rather than replaying stale intermediate ones.
+    pendingCommit = { copy, previous };
+    dispatchCommit();
     clear();
   }
 
@@ -131,6 +144,13 @@ export function useDraggableList<T>(
       class: classes,
       onDragover: (e: DragEvent) => {
         if (state.draggingIndex === null) return;
+        // Skip the source row itself — drawing the drop indicator over the
+        // row the user is dragging from makes the target ambiguous and
+        // creates the illusion of the row being pushed by the indicator.
+        if (state.draggingIndex === idx) {
+          state.dragOverIndex = null;
+          return;
+        }
         e.preventDefault();
         if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
         const target = e.currentTarget as HTMLElement | null;

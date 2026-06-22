@@ -110,15 +110,41 @@ kbd,
   font-variant-numeric: tabular-nums;
 }
 
-/* Drag-and-drop row feedback (shared by UpstreamKeys/PublicModels/ModelGroups). */
+/* Drag-and-drop row feedback (shared by UpstreamKeys/PublicModels/ModelGroups).
+ * The drop indicator is a 4px primary-coloured bar drawn across the entire
+ * target row by attaching a `::before` / `::after` pseudo to every cell.
+ * We can't use a single element spanning the row because `<tr>` isn't a
+ * reliable positioning ancestor in CSS tables, and pseudo-elements on
+ * `<td>` are bounded by the cell's own box. Multiple adjacent cells
+ * each draw their own 4px segment at the same `top` / `bottom`, so the
+ * line visually appears continuous. The dragging row keeps full opacity
+ * and a hover background so the source stays visible while the user
+ * hunts for a target. */
 .drag-dragging td {
-  opacity: 0.55;
+  opacity: 0.4;
+  background: var(--n-color-hover) !important;
 }
-.drag-drop-before td {
-  box-shadow: inset 0 2px 0 var(--n-primary-color);
+.drag-drop-before > td,
+.drag-drop-after > td {
+  position: relative;
 }
-.drag-drop-after td {
-  box-shadow: inset 0 -2px 0 var(--n-primary-color);
+.drag-drop-before > td::before,
+.drag-drop-after > td::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--n-primary-color);
+  box-shadow: 0 0 6px var(--n-primary-color);
+  pointer-events: none;
+  z-index: 2;
+}
+.drag-drop-before > td::before {
+  top: 0;
+}
+.drag-drop-after > td::after {
+  bottom: 0;
 }
 .order-handle {
   display: inline-flex;
