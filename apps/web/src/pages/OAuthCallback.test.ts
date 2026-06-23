@@ -92,4 +92,36 @@ describe('OAuthCallback page', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(wrapper.text()).toContain('Missing authorization code or state');
   });
+
+  it('shows a generic message when the exchange endpoint throws', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(
+        { error: { message: 'bad state', code: 'invalid_state', type: 'invalid_request' } },
+        400,
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { wrapper } = await mountOAuthCallback('/oauth/callback?code=abc&state=xyz');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('bad state');
+  });
+
+  it('goToKeys button navigates back to the upstream keys page from the error card', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { wrapper, router } = await mountOAuthCallback('/oauth/callback?error=cancelled');
+    await flushPromises();
+
+    // The error card exposes a "Go to Upstream Keys" button — clicking it
+    // must call the same router.push as the success auto-redirect.
+    const buttons = wrapper.findAll('button');
+    const back = buttons.find((button) => /go to upstream keys/i.test(button.text()));
+    expect(back).toBeTruthy();
+    await back!.trigger('click');
+    await flushPromises();
+    expect(router.currentRoute.value.name).toBe('upstream-keys');
+  });
 });

@@ -90,6 +90,81 @@ describe('audit logging', () => {
     // safe to expose and helps operators identify which key changed.
     expect(jsonBlob.includes('keyPrefix')).toBe(true);
   });
+
+  it('lists audit events via the admin endpoint with the requested limit', async () => {
+    const rig = await makeAdminRig();
+    try {
+      // Seed 3 rows directly so the test does not depend on login/audit
+      // side-effects from the previous test.
+      await rig.db.delete(auditEvents).run();
+      await rig.db.insert(auditEvents).values([
+        {
+          id: 'ae_1',
+          action: 'app.create',
+          resourceType: 'app',
+          resourceId: 'app_1',
+          actorAdminId: 'admin',
+          actorUsername: 'admin',
+          detailsJson: JSON.stringify({ name: 'first' }),
+          ip: '127.0.0.1',
+          createdAt: new Date('2026-06-23T10:00:00.000Z'),
+        },
+        {
+          id: 'ae_2',
+          action: 'app.update',
+          resourceType: 'app',
+          resourceId: 'app_1',
+          actorAdminId: 'admin',
+          actorUsername: 'admin',
+          detailsJson: null,
+          ip: '127.0.0.1',
+          createdAt: new Date('2026-06-23T10:01:00.000Z'),
+        },
+        {
+          id: 'ae_3',
+          action: 'app.delete',
+          resourceType: 'app',
+          resourceId: 'app_1',
+          actorAdminId: 'admin',
+          actorUsername: 'admin',
+          detailsJson: JSON.stringify({ name: 'first' }),
+          ip: '127.0.0.1',
+          createdAt: new Date('2026-06-23T10:02:00.000Z'),
+        },
+      ]);
+
+      const all = await rig.app.inject({
+        method: 'GET',
+        url: '/api/admin/audit-events',
+        headers: { cookie: rig.cookie },
+      });
+      expect(all.statusCode).toBe(200);
+      const body = all.json() as { items: Array<{ id: string; action: string }> };
+      expect(body.items.map((i) => i.id)).toEqual(['ae_3', 'ae_2', 'ae_1']);
+      // Newest first.
+      expect(body.items[0]?.action).toBe('app.delete');
+
+      // Default limit should clamp to a sane upper bound (≤500).
+      const huge = await rig.app.inject({
+        method: 'GET',
+        url: '/api/admin/audit-events?limit=9999',
+        headers: { cookie: rig.cookie },
+      });
+      expect(huge.statusCode).toBe(200);
+      expect(huge.json().items.length).toBe(3);
+
+      // Invalid limit (non-numeric) falls back to the default of 100.
+      const bogus = await rig.app.inject({
+        method: 'GET',
+        url: '/api/admin/audit-events?limit=abc',
+        headers: { cookie: rig.cookie },
+      });
+      expect(bogus.statusCode).toBe(200);
+      expect(bogus.json().items.length).toBe(3);
+    } finally {
+      await rig.close();
+    }
+  }, 20_000);
 });
 
 describe('redaction helper', () => {

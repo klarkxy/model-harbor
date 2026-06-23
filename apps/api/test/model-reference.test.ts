@@ -7,41 +7,39 @@ import {
   publicModels,
 } from '../src/modules/db/schema.js';
 
-const dataLearnerHtml = `
-<html><body>
-<h3>AA Intelligence Index</h3>
-<div>1</div><div>Image: DeepSeek</div><div>DeepSeek Chat DeepSeek</div><div>86</div>
-<h3>LMArena Text Generation</h3>
-<div>1</div><div>Image: DeepSeek</div><div>DeepSeek Chat</div><div>DeepSeek</div><div>1420</div>
-<h3>大模型性能评测结果</h3>
-<div>1</div><div>Image: DeepSeek</div><div>DeepSeek Chat</div><div>DeepSeek</div>
-<div>HLE 48.20</div><div>ARC-AGI-2 40.00</div><div>FrontierMath - Tier 4 12.50</div>
-<div>SWE-bench Verified 80.60</div><div>τ²-Bench 81.00</div><div>免费商用</div><div>详情</div>
-<div>2</div><div>Image: Moonshot AI</div><div>Kimi K2</div><div>Moonshot AI</div>
-<div>HLE 54.00</div><div>ARC-AGI-2—</div><div>FrontierMath - Tier 4—</div>
-<div>SWE-bench Verified 90.20</div><div>τ²-Bench—</div><div>免费商用</div>
-</body></html>
+// ReLE publishes its leaderboard as a Markdown table. The implementation
+// expects the exact column order from `RELE_COLUMNS` (with `__empty__`
+// being a placeholder 6th column skipped during parsing). We feed three rows
+// so that auto-group ranking can pick a deterministic winner. The `coding`
+// column is the dominant weight in the `code` preset (0.55), so we tune
+// kimi-k2 to win after it is added so the "refresh-auto swaps the winner"
+// assertion holds.
+const releMarkdown = `| 排名 | 大模型 | 机构 | 输出价格 | 总分 |  | 教育 | 医疗与心理健康 | 金融 | 法律与行政公务 | 推理与数学计算 | 语言与指令遵从 | agent与工具调用 | coding |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | deepseek-chat | DeepSeek | 2.0元 | 80.5 |  | 78 | 75 | 80 | 82 | 85 | 81 | 79 | 85 |
+| 2 | qwen-plus | Alibaba | 4.0元 | 75.0 |  | 73 | 70 | 76 | 74 | 80 | 75 | 72 | 80 |
+| 3 | kimi-k2 | Moonshot AI | 12.0元 | 70.0 |  | 68 | 65 | 70 | 69 | 75 | 70 | 67 | 95 |
 `;
 
-function mockDataLearner() {
+function mockRele() {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
       const href = String(url);
-      if (href.includes('datalearner.com')) {
+      if (href.includes('raw.githubusercontent.com') && href.includes('alldata.md')) {
         return {
           ok: true,
           status: 200,
+          text: async () => releMarkdown,
           json: async () => ({}),
-          text: async () => dataLearnerHtml,
         };
       }
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({}),
-        text: async () => '<html></html>',
-      };
+      // GitHub releases API used for tagging — return empty so the
+      // implementation falls back to `main`.
+      if (href.includes('api.github.com/repos')) {
+        return { ok: false, status: 404, text: async () => '', json: async () => ({}) };
+      }
+      return { ok: false, status: 404, text: async () => '', json: async () => ({}) };
     }),
   );
 }
@@ -66,10 +64,10 @@ async function seedPublicModel(rig: Awaited<ReturnType<typeof makeAdminRig>>, na
 }
 
 describe('model reference admin API', () => {
-  it('refreshes the global DataLearner reference and respects TTL', async () => {
+  it('refreshes the global ReLE reference and respects TTL', async () => {
     const rig = await makeAdminRig();
     try {
-      mockDataLearner();
+      mockRele();
       const refreshed = await rig.app.inject({
         method: 'POST',
         url: '/api/admin/model-reference/refresh',
@@ -78,7 +76,7 @@ describe('model reference admin API', () => {
       });
       expect(refreshed.statusCode).toBe(200);
       expect(refreshed.json().refreshed).toBe(true);
-      expect(refreshed.json().sources).toEqual(['datalearner']);
+      expect(refreshed.json().sources).toEqual(['rele']);
 
       const list = await rig.app.inject({
         method: 'GET',
@@ -89,12 +87,13 @@ describe('model reference admin API', () => {
       expect(list.json().items.length).toBeGreaterThan(0);
       expect(list.json().sync).toHaveLength(1);
       expect(list.json().items[0].region).toBe('global');
-      expect(list.json().items[0].scores).toHaveProperty('math');
-      expect(list.json().items[0].scores).toHaveProperty('chat');
-      const deepseek = list.json().items.find((item: { displayName: string }) => item.displayName === 'DeepSeek Chat');
+      expect(list.json().items[0].scores).toHaveProperty('coding');
+      expect(list.json().items[0].scores).toHaveProperty('总分');
+      const deepseek = list.json().items.find(
+        (item: { normalizedModelName: string }) => item.normalizedModelName === 'deepseek-chat',
+      );
       expect(deepseek.provider).toBe('DeepSeek');
-      expect(deepseek.scores.intelligence).toBe(86);
-      expect(list.json().items.some((item: { displayName: string }) => item.displayName.startsWith('Image:'))).toBe(false);
+      expect(deepseek.scores.coding).toBe(85);
 
       const cached = await rig.app.inject({
         method: 'POST',
@@ -112,7 +111,7 @@ describe('model reference admin API', () => {
   it('creates auto groups as member snapshots and refreshes only on demand', async () => {
     const rig = await makeAdminRig();
     try {
-      mockDataLearner();
+      mockRele();
       const deepseekId = await seedPublicModel(rig, 'deepseek-chat');
       await seedPublicModel(rig, 'qwen-plus');
       await rig.app.inject({

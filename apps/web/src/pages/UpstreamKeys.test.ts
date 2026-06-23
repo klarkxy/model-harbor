@@ -183,6 +183,19 @@ async function mountUpstreamKeys() {
           template:
             '<div data-testid="mapping-editor"><button type="button" data-testid="set-mappings" @click="$emit(\'update:modelValue\', [{ realName: \'claude-real\', publicName: \'\', enabled: true }, { realName: \'disabled-real\', publicName: \'disabled\', enabled: false }])">set mappings</button><div v-for="m in modelValue" :key="m.realName">{{ m.realName }} {{ m.publicName }}</div></div>',
         },
+        // NPopconfirm normally renders a portal; for tests we collapse it
+        // into a single "Yes" button that calls the positive handler. This
+        // is the only way to drive the delete confirmation without a
+        // full happy-dom portal.
+        NPopconfirm: {
+          props: ['onPositiveClick'],
+          template:
+            '<button data-testid="popconfirm-yes" @click="onPositiveClick && onPositiveClick()">Yes</button>',
+        },
+        NModal: {
+          props: ['show'],
+          template: '<div v-if="show" class="modal"><slot /></div>',
+        },
       },
     },
     slots: {
@@ -271,5 +284,280 @@ describe('UpstreamKeys page', () => {
       authType: 'pat',
       apiKey: 'sk-local',
     });
+  });
+
+  it('calls the freeze endpoint when toggling freeze on an active key', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/api/admin/upstream-keys') && (!init || init.method === 'GET')) {
+        return jsonResponse({ items: [upstreamKey()] });
+      }
+      if (url.endsWith('/api/admin/provider-presets')) return jsonResponse({ items: [] });
+      if (url.endsWith('/api/admin/upstream-endpoint-health')) return jsonResponse({ items: [] });
+      if (url.endsWith('/api/admin/upstream-keys/uk_1/freeze') && init?.method === 'POST') {
+        return jsonResponse(upstreamKey({ frozen: true }));
+      }
+      if (url.endsWith('/api/admin/upstream-keys/uk_1/unfreeze') && init?.method === 'POST') {
+        return jsonResponse(upstreamKey());
+      }
+      return jsonResponse({});
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { wrapper } = await mountUpstreamKeys();
+    await flushPromises();
+
+    const vm = wrapper.findComponent(UpstreamKeys).vm as unknown as {
+      toggleFreeze: (row: { id: string; frozen: boolean }) => Promise<void>;
+    };
+    await vm.toggleFreeze({ id: 'uk_1', frozen: false });
+    await flushPromises();
+
+    const freezeCall = fetchMock.mock.calls.find(
+      ([url, init]) =>
+        String(url).endsWith('/api/admin/upstream-keys/uk_1/freeze') &&
+        (init as RequestInit | undefined)?.method === 'POST',
+    );
+    expect(freezeCall).toBeTruthy();
+  });
+
+  it('calls the unfreeze endpoint when toggling a frozen key', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/api/admin/upstream-keys') && (!init || init.method === 'GET')) {
+        return jsonResponse({ items: [upstreamKey({ frozen: true })] });
+      }
+      if (url.endsWith('/api/admin/provider-presets')) return jsonResponse({ items: [] });
+      if (url.endsWith('/api/admin/upstream-endpoint-health')) return jsonResponse({ items: [] });
+      if (url.endsWith('/api/admin/upstream-keys/uk_1/unfreeze') && init?.method === 'POST') {
+        return jsonResponse(upstreamKey());
+      }
+      return jsonResponse({});
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { wrapper } = await mountUpstreamKeys();
+    await flushPromises();
+
+    const vm = wrapper.findComponent(UpstreamKeys).vm as unknown as {
+      toggleFreeze: (row: { id: string; frozen: boolean }) => Promise<void>;
+    };
+    await vm.toggleFreeze({ id: 'uk_1', frozen: true });
+    await flushPromises();
+
+    const unfreezeCall = fetchMock.mock.calls.find(
+      ([url, init]) =>
+        String(url).endsWith('/api/admin/upstream-keys/uk_1/unfreeze') &&
+        (init as RequestInit | undefined)?.method === 'POST',
+    );
+    expect(unfreezeCall).toBeTruthy();
+  });
+
+  it('deletes an upstream key through handleDelete', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/api/admin/upstream-keys') && (!init || init.method === 'GET')) {
+        return jsonResponse({ items: [upstreamKey()] });
+      }
+      if (url.endsWith('/api/admin/provider-presets')) return jsonResponse({ items: [] });
+      if (url.endsWith('/api/admin/upstream-endpoint-health')) return jsonResponse({ items: [] });
+      if (url.endsWith('/api/admin/upstream-keys/uk_1') && init?.method === 'DELETE') {
+        return new Response(null, { status: 204 });
+      }
+      return jsonResponse({});
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { wrapper } = await mountUpstreamKeys();
+    await flushPromises();
+
+    const vm = wrapper.findComponent(UpstreamKeys).vm as unknown as {
+      handleDelete: (row: { id: string }) => Promise<void>;
+    };
+    await vm.handleDelete({ id: 'uk_1' });
+    await flushPromises();
+
+    const deleteCall = fetchMock.mock.calls.find(
+      ([url, init]) =>
+        String(url).endsWith('/api/admin/upstream-keys/uk_1') &&
+        (init as RequestInit | undefined)?.method === 'DELETE',
+    );
+    expect(deleteCall).toBeTruthy();
+  });
+
+  it('duplicates a PAT upstream key with a new name and api key', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/api/admin/upstream-keys') && (!init || init.method === 'GET')) {
+        return jsonResponse({ items: [upstreamKey()] });
+      }
+      if (url.endsWith('/api/admin/provider-presets')) return jsonResponse({ items: [] });
+      if (url.endsWith('/api/admin/upstream-endpoint-health')) return jsonResponse({ items: [] });
+      if (url.endsWith('/api/admin/upstream-keys/uk_1/duplicate') && init?.method === 'POST') {
+        return jsonResponse(upstreamKey({ id: 'uk_copy', name: 'Primary copy' }));
+      }
+      return jsonResponse({});
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { wrapper } = await mountUpstreamKeys();
+    await flushPromises();
+
+    const vm = wrapper.findComponent(UpstreamKeys).vm as unknown as {
+      openDuplicate: (row: { id: string; name: string }) => void;
+      handleDuplicate: () => Promise<void>;
+    };
+    vm.openDuplicate({ id: 'uk_1', name: 'Primary' });
+    await flushPromises();
+
+    // After openDuplicate(), the form fields are pre-filled; the validation
+    // gate requires an apiKey, so we patch it through the duplicateForm ref.
+    const internal = vm as unknown as {
+      duplicateForm: { name: string; apiKey: string; routingMode: string };
+    };
+    internal.duplicateForm.name = 'Primary copy';
+    internal.duplicateForm.apiKey = 'sk-new-key';
+
+    await vm.handleDuplicate();
+    await flushPromises();
+
+    const dupCall = fetchMock.mock.calls.find(
+      ([url, init]) =>
+        String(url).endsWith('/api/admin/upstream-keys/uk_1/duplicate') &&
+        (init as RequestInit | undefined)?.method === 'POST',
+    );
+    expect(dupCall).toBeTruthy();
+    const body = JSON.parse(String((dupCall![1] as RequestInit).body)) as {
+      name: string;
+      apiKey: string;
+      routingMode: string;
+    };
+    expect(body).toMatchObject({
+      name: 'Primary copy',
+      apiKey: 'sk-new-key',
+      routingMode: 'failover',
+    });
+  });
+
+  it('refuses to duplicate when the form is missing the api key', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/api/admin/upstream-keys') && (!init || init.method === 'GET')) {
+        return jsonResponse({ items: [upstreamKey()] });
+      }
+      if (url.endsWith('/api/admin/provider-presets')) return jsonResponse({ items: [] });
+      if (url.endsWith('/api/admin/upstream-endpoint-health')) return jsonResponse({ items: [] });
+      return jsonResponse({});
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { wrapper } = await mountUpstreamKeys();
+    await flushPromises();
+
+    const vm = wrapper.findComponent(UpstreamKeys).vm as unknown as {
+      openDuplicate: (row: { id: string; name: string }) => void;
+      handleDuplicate: () => Promise<void>;
+    };
+    vm.openDuplicate({ id: 'uk_1', name: 'Primary' });
+    await flushPromises();
+    const internal = vm as unknown as {
+      duplicateForm: { name: string; apiKey: string; routingMode: string };
+    };
+    internal.duplicateForm.name = '';
+    internal.duplicateForm.apiKey = '';
+
+    await vm.handleDuplicate();
+    await flushPromises();
+
+    // No duplicate endpoint should have been called because the validation
+    // gate caught the empty name + api key before issuing the request.
+    const dupCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).endsWith('/api/admin/upstream-keys/uk_1/duplicate'),
+    );
+    expect(dupCall).toBeFalsy();
+  });
+
+  it('opens the ping modal and pings a single candidate model', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/api/admin/upstream-keys') && (!init || init.method === 'GET')) {
+        return jsonResponse({ items: [upstreamKey()] });
+      }
+      if (url.endsWith('/api/admin/provider-presets')) return jsonResponse({ items: [] });
+      if (url.endsWith('/api/admin/upstream-endpoint-health')) return jsonResponse({ items: [] });
+      if (url.endsWith('/api/admin/upstream-keys/uk_1/candidates')) {
+        return jsonResponse({
+          items: [{ id: 'cand_1', publicName: 'claude-real', realName: 'claude-real', enabled: true, lastPingAt: null, lastPingOk: null, lastPingStatus: null, lastPingLatencyMs: null, lastPingError: null }],
+        });
+      }
+      if (url.endsWith('/api/admin/upstream-keys/uk_1/ping') && init?.method === 'POST') {
+        return jsonResponse({ ok: true, latencyMs: 187 });
+      }
+      return jsonResponse({});
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { wrapper } = await mountUpstreamKeys();
+    await flushPromises();
+
+    const vm = wrapper.findComponent(UpstreamKeys).vm as unknown as {
+      openPing: (row: { id: string }) => Promise<void>;
+      handlePing: (id: string, realName: string) => Promise<void>;
+    };
+    await vm.openPing({ id: 'uk_1' });
+    await flushPromises();
+
+    await vm.handlePing('uk_1', 'claude-real');
+    await flushPromises();
+
+    const pingCall = fetchMock.mock.calls.find(
+      ([url, init]) =>
+        String(url).endsWith('/api/admin/upstream-keys/uk_1/ping') &&
+        (init as RequestInit | undefined)?.method === 'POST',
+    );
+    expect(pingCall).toBeTruthy();
+    expect(JSON.parse(String((pingCall![1] as RequestInit).body))).toEqual({
+      realModelName: 'claude-real',
+    });
+  });
+
+  it('opens the endpoint health modal and fetches per-key rows', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/api/admin/upstream-keys') && (!init || init.method === 'GET')) {
+        return jsonResponse({ items: [upstreamKey()] });
+      }
+      if (url.endsWith('/api/admin/provider-presets')) return jsonResponse({ items: [] });
+      if (url.endsWith('/api/admin/upstream-endpoint-health')) {
+        return jsonResponse({
+          items: [
+            {
+              id: 'health_1',
+              upstreamKeyId: 'uk_1',
+              endpointBaseUrl: 'https://api.anthropic.test',
+              delayMs: 180,
+              lastCheckedAt: Date.parse('2026-06-23T00:00:00.000Z'),
+              degraded: false,
+              errorCode: null,
+              errorMessage: null,
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+            },
+          ],
+        });
+      }
+      if (url.includes('/api/admin/upstream-endpoint-health?upstreamKeyId=uk_1')) {
+        return jsonResponse({ items: [] });
+      }
+      return jsonResponse({});
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { wrapper } = await mountUpstreamKeys();
+    await flushPromises();
+
+    const vm = wrapper.findComponent(UpstreamKeys).vm as unknown as {
+      openHealth: (row: { id: string; name: string }) => Promise<void>;
+    };
+    await vm.openHealth({ id: 'uk_1', name: 'Primary' });
+    await flushPromises();
+
+    const healthCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).includes('/api/admin/upstream-endpoint-health?upstreamKeyId=uk_1'),
+    );
+    expect(healthCall).toBeTruthy();
   });
 });

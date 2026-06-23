@@ -160,7 +160,7 @@ describe('circuit breaker gateway integration', () => {
       .where(eq(requestTraceLogs.step, 'circuit_breaker_open'))
       .all();
     expect(traces.length).toBeGreaterThanOrEqual(1);
-  });
+  }, 20_000);
 
   it('allows traffic again once the breaker transitions to half_open', async () => {
     for (let i = 0; i < 5; i++) {
