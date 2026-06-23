@@ -394,7 +394,7 @@ export const modelGroupMembers = sqliteTable(
 export const MODEL_REFERENCE_REGIONS = ['global'] as const;
 export type ModelReferenceRegion = (typeof MODEL_REFERENCE_REGIONS)[number];
 
-export const MODEL_REFERENCE_SOURCES = ['datalearner'] as const;
+export const MODEL_REFERENCE_SOURCES = ['rele'] as const;
 export type ModelReferenceSource = (typeof MODEL_REFERENCE_SOURCES)[number];
 
 export const modelReferenceEntries = sqliteTable(

@@ -53,26 +53,49 @@ export interface AutoGroupRecommendation {
   };
 }
 
-const DATALEARNER_LEADERBOARD_URL = 'https://www.datalearner.com/leaderboards';
+// ReLE (Really Reliable Live Evaluation for LLM) by jeinlee1991 — the
+// upstream repository hosts the leaderboard as a Markdown table, not as a
+// machine-readable JSON/CSV. We pull alldata.md from raw.githubusercontent.com
+// (the GitHub raw CDN) and parse it ourselves. See:
+//   https://github.com/jeinlee1991/chinese-llm-benchmark
+const RELE_REPO_OWNER = 'jeinlee1991';
+const RELE_REPO_NAME = 'chinese-llm-benchmark';
+const RELE_RAW_BASE = `https://raw.githubusercontent.com/${RELE_REPO_OWNER}/${RELE_REPO_NAME}/main`;
+const RELE_LEADERBOARD_URL = `${RELE_RAW_BASE}/leaderboard/alldata.md`;
+const RELE_RELEASES_API = `https://api.github.com/repos/${RELE_REPO_OWNER}/${RELE_REPO_NAME}/releases/latest`;
 
-const DATALEARNER_PROVIDER_SUFFIXES = [
-  'Facebook AI研究实验室',
-  'Google Deep Mind',
-  '字节跳动Seed团队',
-  'Microsoft Azure',
-  'Google Research',
-  'Stability AI',
-  'DeepSeek-AI',
-  'Anthropic',
-  'MistralAI',
-  '阿里巴巴',
-  'OpenAI',
-  '智谱AI',
-  'Google',
-  'DeepSeek',
-  '百度',
-  'xAI',
+// Column order in alldata.md (verified 2026-06-23 against the live file).
+// The 6th column is an empty placeholder (`| |`) used for layout and is
+// intentionally skipped during parsing. Column names match the Markdown
+// header verbatim — we look them up by `headerIndex.get(column)`.
+const RELE_COLUMNS = [
+  '排名',
+  '大模型',
+  '机构',
+  '输出价格',
+  '总分',
+  '__empty__',
+  '教育',
+  '医疗与心理健康',
+  '金融',
+  '法律与行政公务',
+  '推理与数学计算',
+  '语言与指令遵从',
+  'agent与工具调用',
+  'coding',
 ] as const;
+
+const RELE_SCORE_KEYS = new Set<string>([
+  '总分',
+  '教育',
+  '医疗与心理健康',
+  '金融',
+  '法律与行政公务',
+  '推理与数学计算',
+  '语言与指令遵从',
+  'agent与工具调用',
+  'coding',
+]);
 
 const PRESET_WEIGHTS: Record<AutoGroupPreset, Required<AutoGroupWeights>> = {
   balanced: {
@@ -192,7 +215,9 @@ function numericScores(row: ModelReferenceEntryRow): Record<string, number> {
 
 function priceForScore(row: ModelReferenceEntryRow): number | null {
   const price = parseJsonRecord(row.priceJson);
-  const blended = price.blendedUsdPerMTok ?? price.blendedCnyPerMTok;
+  // ReLE stores CNY per million output tokens. Older USD/CNY-keyed sources
+  // may also appear if other sources are wired in later.
+  const blended = price.blendedUsdPerMTok ?? price.blendedCnyPerMTok ?? price.cnyPerMTok;
   if (typeof blended === 'number' && Number.isFinite(blended) && blended >= 0) return blended;
   const input = price.inputUsdPerMTok ?? price.inputCnyPerMTok;
   const output = price.outputUsdPerMTok ?? price.outputCnyPerMTok;
@@ -290,6 +315,7 @@ function presentAggregatedEntries(rows: ModelReferenceEntryRow[]) {
     let contextWindow: number | null = null;
     let outputSpeed: number | null = null;
     let latencyMs: number | null = null;
+    let rank: number | null = null;
     for (const row of group) {
       for (const [key, value] of Object.entries(numericScores(row))) {
         scores[key] = Math.max(scores[key] ?? 0, value);
@@ -308,6 +334,10 @@ function presentAggregatedEntries(rows: ModelReferenceEntryRow[]) {
       if (row.latencyMs !== null && (latencyMs === null || row.latencyMs < latencyMs)) {
         latencyMs = row.latencyMs;
       }
+      const rowRank = parseRankFromPayload(row.rawPayloadJson);
+      if (rowRank !== null && (rank === null || rowRank < rank)) {
+        rank = rowRank;
+      }
     }
     return {
       id: `agg_${normalizedModelName}`,
@@ -324,10 +354,21 @@ function presentAggregatedEntries(rows: ModelReferenceEntryRow[]) {
       latencyMs,
       sourceUrl: primary.sourceUrl,
       rawUnit: primary.rawUnit,
+      rank,
       fetchedAt: new Date(Math.max(...group.map((row) => row.fetchedAt.getTime()))),
       updatedAt: new Date(Math.max(...group.map((row) => row.updatedAt.getTime()))),
     };
   });
+}
+
+function parseRankFromPayload(rawPayloadJson: string | null): number | null {
+  if (!rawPayloadJson) return null;
+  try {
+    const parsed = JSON.parse(rawPayloadJson) as { rank?: unknown };
+    return typeof parsed.rank === 'number' && Number.isFinite(parsed.rank) ? parsed.rank : null;
+  } catch {
+    return null;
+  }
 }
 
 async function ensureSyncStatus(db: Db, region: ModelReferenceRegion, source: ModelReferenceSource) {
@@ -361,25 +402,8 @@ async function ensureSyncStatus(db: Db, region: ModelReferenceRegion, source: Mo
       .get()) ?? row
   );
 }
-
 function sourcesForRegion(_region: ModelReferenceRegion): ModelReferenceSource[] {
-  return ['datalearner'];
-}
-
-function stripHtmlToLines(html: string): string[] {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, '\n')
-    .replace(/<style[\s\S]*?<\/style>/gi, '\n')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div|li|tr|td|th|h[1-6])>/gi, '\n')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&#39;/g, "'")
-    .replace(/&quot;/g, '"')
-    .split(/\r?\n/)
-    .map((line) => line.replace(/\s+/g, ' ').trim())
-    .filter(Boolean);
+  return ['rele'];
 }
 
 function parseNumber(value: string | undefined): number | null {
@@ -390,62 +414,6 @@ function parseNumber(value: string | undefined): number | null {
 
 function entryId(): string {
   return `mr_${generateId('modelReference').slice(-18)}`;
-}
-
-function isLikelyModelName(line: string): boolean {
-  if (line.length < 2 || line.length > 120) return false;
-  if (/^(AA Intelligence Index|LMArena Text Generation|大模型性能评测结果)$/.test(line)) return false;
-  if (/^(#|基于|用于|反映|点击|查看|知名模型开发商)/.test(line)) return false;
-  if (/^(Image:|详情|查看详情|完整排名|来源：|数据更新于|数据来源：|排名|模型|分数|Elo)/i.test(line)) {
-    return false;
-  }
-  if (/^(HLE|ARC-AGI-2|FrontierMath|SWE-bench|τ²-Bench|闭源|免费商用|不可商用|开源情况)/.test(line)) {
-    return false;
-  }
-  if (/^\d+(?:\.\d+)?$/.test(line)) return false;
-  return /[A-Za-z0-9\u4e00-\u9fa5]/.test(line);
-}
-
-function parseBenchmarkLine(line: string): [string, number | null] | null {
-  const match = line.match(/^(HLE|ARC-AGI-2|FrontierMath(?: - Tier 4)?|SWE-bench Verified|τ²-Bench)\s*(—|-|\d+(?:\.\d+)?)$/);
-  if (!match) return null;
-  return [match[1]!, parseNumber(match[2])];
-}
-
-function splitProviderSuffix(value: string, provider: string | null): { displayName: string; provider: string | null } {
-  if (provider) return { displayName: value, provider };
-  const match = DATALEARNER_PROVIDER_SUFFIXES.find((suffix) => value.endsWith(` ${suffix}`));
-  if (!match) return { displayName: value, provider };
-  const displayName = value.slice(0, -match.length).trim();
-  return displayName ? { displayName, provider: match } : { displayName: value, provider };
-}
-
-function mapDataLearnerScores(raw: Record<string, number>): Record<string, number> {
-  const scores: Record<string, number> = {};
-  if (typeof raw.hle === 'number') {
-    scores.intelligence = Math.max(scores.intelligence ?? 0, raw.hle);
-    scores.knowledge = Math.max(scores.knowledge ?? 0, raw.hle);
-  }
-  if (typeof raw.arc_agi_2 === 'number') {
-    scores.reasoning = Math.max(scores.reasoning ?? 0, raw.arc_agi_2);
-  }
-  if (typeof raw.frontiermath === 'number') {
-    scores.math = Math.max(scores.math ?? 0, raw.frontiermath);
-  }
-  if (typeof raw.swe_bench === 'number') {
-    scores.coding = Math.max(scores.coding ?? 0, raw.swe_bench);
-  }
-  if (typeof raw.tau2_bench === 'number') {
-    scores.agentic = Math.max(scores.agentic ?? 0, raw.tau2_bench);
-  }
-  if (typeof raw.lmarena === 'number') {
-    scores.chat = Math.max(scores.chat ?? 0, Math.max(0, Math.min(100, ((raw.lmarena - 1000) / 600) * 100)));
-    scores.lmarena_elo = raw.lmarena;
-  }
-  if (typeof raw.aa_intelligence === 'number') {
-    scores.intelligence = Math.max(scores.intelligence ?? 0, raw.aa_intelligence);
-  }
-  return scores;
 }
 
 function mergeNumericScores(left: Record<string, unknown>, right: Record<string, unknown>): Record<string, unknown> {
@@ -461,150 +429,160 @@ function mergeNumericScores(left: Record<string, unknown>, right: Record<string,
   return merged;
 }
 
-function makeDataLearnerEntry(
-  input: {
-    displayName: string;
-    provider: string | null;
-    rawScores: Record<string, number>;
-    rawPayload: unknown;
-  },
-  now: Date,
-  region: ModelReferenceRegion,
-): ModelReferenceEntryInsert | null {
-  const identity = splitProviderSuffix(input.displayName, input.provider);
-  const normalized = normalizeModelName(identity.displayName);
-  const scores = mapDataLearnerScores(input.rawScores);
-  if (!normalized || Object.keys(scores).length === 0) return null;
-  return {
-    id: entryId(),
-    region,
-    source: 'datalearner',
-    normalizedModelName: normalized,
-    sourceModelId: identity.displayName,
-    displayName: identity.displayName,
-    provider: identity.provider,
-    scoresJson: JSON.stringify(scores),
-    priceJson: JSON.stringify({ source: 'datalearner' }),
-    contextWindow: null,
-    outputSpeed: null,
-    latencyMs: null,
-    sourceUrl: DATALEARNER_LEADERBOARD_URL,
-    rawUnit: 'DataLearner aggregated benchmark scores',
-    rawPayloadJson: JSON.stringify(input.rawPayload).slice(0, 20000),
-    fetchedAt: now,
-    updatedAt: now,
-  };
+// Strip ReLE's trailing "(new)" badge so we can match public models that
+// have been on the board for a while.
+function stripReleNewBadge(value: string): string {
+  return value.replace(/\(new\)\s*$/i, '').trim();
 }
 
-function parseDataLearnerPerformanceTable(
-  lines: string[],
-  now: Date,
-  region: ModelReferenceRegion,
-): ModelReferenceEntryInsert[] {
-  const start = lines.findIndex((line) => line.includes('大模型性能评测结果'));
-  if (start < 0) return [];
-  const entries: ModelReferenceEntryInsert[] = [];
-  for (let i = start; i < lines.length; i += 1) {
-    if (!/^\d{1,3}$/.test(lines[i] ?? '')) continue;
-    const window = lines.slice(i + 1, i + 16);
-    const firstMetricIndex = window.findIndex((line) => parseBenchmarkLine(line) !== null);
-    if (firstMetricIndex <= 0) continue;
-    const nameCandidates = window.slice(0, firstMetricIndex).filter(isLikelyModelName);
-    const displayName = nameCandidates[0];
-    const provider = nameCandidates[1] ?? null;
-    if (!displayName) continue;
-    const rawScores: Record<string, number> = {};
-    for (const line of window.slice(firstMetricIndex)) {
-      if (/^\d{1,3}$/.test(line) && Object.keys(rawScores).length > 0) break;
-      const parsed = parseBenchmarkLine(line);
-      if (!parsed) continue;
-      const [label, value] = parsed;
-      if (value === null) continue;
-      if (label === 'HLE') rawScores.hle = value;
-      if (label === 'ARC-AGI-2') rawScores.arc_agi_2 = value;
-      if (label.startsWith('FrontierMath')) rawScores.frontiermath = value;
-      if (label === 'SWE-bench Verified') rawScores.swe_bench = value;
-      if (label === 'τ²-Bench') rawScores.tau2_bench = value;
-    }
-    const entry = makeDataLearnerEntry(
-      { displayName, provider, rawScores, rawPayload: { rank: lines[i], window } },
-      now,
-      region,
-    );
-    if (entry) entries.push(entry);
-  }
-  return entries;
+// Parse `36.0元` (output price per million tokens, CNY). We keep the
+// original string in priceJson as `display` so the UI can show "36.0元"
+// without losing precision from float round-tripping.
+function parseRelePriceCny(value: string): { cnyPerMTok: number | null; display: string | null } {
+  const trimmed = value.trim();
+  if (!trimmed) return { cnyPerMTok: null, display: null };
+  const match = trimmed.match(/^([\d.]+)\s*元/);
+  if (!match) return { cnyPerMTok: null, display: trimmed };
+  const cny = parseNumber(match[1]);
+  return { cnyPerMTok: cny, display: trimmed };
 }
 
-function parseDataLearnerSimpleRanking(
-  lines: string[],
-  marker: string,
-  scoreKey: 'aa_intelligence' | 'lmarena',
-  now: Date,
-  region: ModelReferenceRegion,
-): ModelReferenceEntryInsert[] {
-  const start = lines.findIndex((line) => line.includes(marker));
-  if (start < 0) return [];
-  const entries: ModelReferenceEntryInsert[] = [];
-  for (let i = start; i < Math.min(lines.length, start + 180); i += 1) {
-    if (!/^\d{1,3}$/.test(lines[i] ?? '')) continue;
-    const window = lines.slice(i + 1, i + 8);
-    const numericIndex = window.findIndex((line) => /^\d+(?:\.\d+)?$/.test(line));
-    if (numericIndex <= 0) continue;
-    const nameCandidates = window.slice(0, numericIndex).filter(isLikelyModelName);
-    const displayName = nameCandidates[0];
-    const provider = nameCandidates[1] ?? null;
-    const value = parseNumber(window[numericIndex]);
-    if (!displayName || value === null) continue;
-    if (scoreKey === 'aa_intelligence' && (value < 0 || value > 100)) continue;
-    if (scoreKey === 'lmarena' && (value < 1000 || value > 2000)) continue;
-    const entry = makeDataLearnerEntry(
-      {
-        displayName,
-        provider,
-        rawScores: { [scoreKey]: value },
-        rawPayload: { rank: lines[i], window, marker },
-      },
-      now,
-      region,
-    );
-    if (entry) entries.push(entry);
-  }
-  return entries;
+function splitMarkdownTableRow(line: string): string[] | null {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith('|') || !trimmed.endsWith('|')) return null;
+  if (trimmed.length <= 2) return null;
+  const cells = trimmed.slice(1, -1).split('|').map((c) => c.trim());
+  if (cells.length < 2) return null;
+  // A separator row like `|---|---|` is not data.
+  if (cells.every((c) => c === '' || /^:?-+:?$/.test(c))) return null;
+  return cells;
 }
 
-async function fetchDataLearnerEntries(now: Date, region: ModelReferenceRegion): Promise<ModelReferenceEntryInsert[]> {
-  const res = await fetch(DATALEARNER_LEADERBOARD_URL, {
-    headers: { accept: 'text/html', 'user-agent': 'ModelHarbor/0.1 model-reference-refresh' },
-  });
-  if (!res.ok) throw new Error(`DataLearner refresh failed: HTTP ${res.status}`);
-  const lines = stripHtmlToLines(await res.text());
-  const entries = [
-    ...parseDataLearnerSimpleRanking(lines, 'AA Intelligence Index', 'aa_intelligence', now, region),
-    ...parseDataLearnerSimpleRanking(lines, 'LMArena Text Generation', 'lmarena', now, region),
-    ...parseDataLearnerPerformanceTable(lines, now, region),
-  ];
-  const byModel = new Map<string, ModelReferenceEntryInsert>();
-  for (const entry of entries) {
-    const existing = byModel.get(entry.normalizedModelName);
-    if (!existing) {
-      byModel.set(entry.normalizedModelName, entry);
+function parseReleMarkdownTable(markdown: string): { header: string[]; rows: string[][] } {
+  const header: string[] = [];
+  const rows: string[][] = [];
+  let headerSet = false;
+  for (const rawLine of markdown.split(/\r?\n/)) {
+    if (!rawLine.includes('|')) continue;
+    const cells = splitMarkdownTableRow(rawLine);
+    if (!cells) continue;
+    if (!headerSet) {
+      for (const c of cells) header.push(c);
+      headerSet = true;
       continue;
     }
-    const mergedScores = mergeNumericScores(
-      parseJsonRecord(existing.scoresJson ?? '{}'),
-      parseJsonRecord(entry.scoresJson ?? '{}'),
-    );
-    byModel.set(entry.normalizedModelName, {
-      ...existing,
-      scoresJson: JSON.stringify(mergedScores),
-      rawPayloadJson: JSON.stringify([
-        parseJsonRecord(existing.rawPayloadJson ?? '{}'),
-        parseJsonRecord(entry.rawPayloadJson ?? '{}'),
-      ]).slice(0, 20000),
+    rows.push(cells);
+  }
+  return { header, rows };
+}
+
+// Best-effort: fetch the latest ReLE release tag so each row and the sync
+// status can record which version of the leaderboard it was sourced from.
+// Returns null on rate-limit / non-2xx; the leaderboard pull still proceeds
+// using the live `main` ref as a fallback.
+async function fetchReleLatestTag(): Promise<{ tag: string; url: string } | null> {
+  try {
+    const res = await fetch(RELE_RELEASES_API, {
+      headers: { accept: 'application/vnd.github+json', 'user-agent': 'ModelHarbor/0.1' },
+    });
+    if (!res.ok) return null;
+    const payload = (await res.json()) as { tag_name?: unknown; html_url?: unknown };
+    if (typeof payload.tag_name !== 'string' || !payload.tag_name) return null;
+    return {
+      tag: payload.tag_name,
+      url:
+        typeof payload.html_url === 'string'
+          ? payload.html_url
+          : `https://github.com/${RELE_REPO_OWNER}/${RELE_REPO_NAME}/releases/tag/${payload.tag_name}`,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchReleEntries(now: Date, region: ModelReferenceRegion): Promise<ModelReferenceEntryInsert[]> {
+  const res = await fetch(RELE_LEADERBOARD_URL, {
+    headers: { accept: 'text/markdown, text/plain;q=0.9, */*;q=0.5', 'user-agent': 'ModelHarbor/0.1 model-reference-refresh' },
+  });
+  if (!res.ok) throw new Error(`ReLE refresh failed: HTTP ${res.status}`);
+  const markdown = await res.text();
+  const { header, rows } = parseReleMarkdownTable(markdown);
+  if (header.length === 0) throw new Error('ReLE refresh failed: empty markdown table');
+
+  const headerIndex = new Map<string, number>();
+  header.forEach((name, idx) => headerIndex.set(name.trim(), idx));
+
+  const tagInfo = await fetchReleLatestTag();
+  const tag = tagInfo?.tag ?? 'main';
+  const sourceUrl = tagInfo
+    ? `${RELE_RAW_BASE.replace('/main', `/tag/${tag}`)}/leaderboard/alldata.md`
+    : RELE_LEADERBOARD_URL;
+  const rawUnit = `ReLE leaderboard @ ${tag}`;
+
+  const entries: ModelReferenceEntryInsert[] = [];
+  for (const cells of rows) {
+    const get = (column: (typeof RELE_COLUMNS)[number]): string => {
+      const idx = headerIndex.get(column);
+      if (idx === undefined) return '';
+      return (cells[idx] ?? '').trim();
+    };
+
+    const rankStr = get('排名');
+    const modelRaw = get('大模型');
+    const provider = get('机构') || null;
+    const priceRaw = get('输出价格');
+    if (!modelRaw) continue;
+    if (!/^\d+$/.test(rankStr)) continue;
+
+    const displayName = stripReleNewBadge(modelRaw);
+    const normalized = normalizeModelName(displayName);
+    if (!normalized) continue;
+
+    const { cnyPerMTok, display: priceDisplay } = parseRelePriceCny(priceRaw);
+
+    const scores: Record<string, number> = {};
+    for (const key of RELE_COLUMNS) {
+      if (
+        key === '__empty__' ||
+        key === '排名' ||
+        key === '大模型' ||
+        key === '机构' ||
+        key === '输出价格'
+      )
+        continue;
+      const value = parseNumber(get(key));
+      if (value === null) continue;
+      scores[key] = value;
+    }
+    if (Object.keys(scores).length === 0) continue;
+
+    entries.push({
+      id: entryId(),
+      region,
+      source: 'rele',
+      normalizedModelName: normalized,
+      sourceModelId: modelRaw,
+      displayName,
+      provider,
+      scoresJson: JSON.stringify(scores),
+      priceJson: JSON.stringify({
+        cnyPerMTok,
+        display: priceDisplay,
+        currency: 'CNY',
+        source: 'rele',
+        tag,
+      }),
+      contextWindow: null,
+      outputSpeed: null,
+      latencyMs: null,
+      sourceUrl,
+      rawUnit,
+      rawPayloadJson: JSON.stringify({ rank: Number(rankStr), cells, tag }).slice(0, 20000),
+      fetchedAt: now,
+      updatedAt: now,
     });
   }
-  return [...byModel.values()];
+  return entries;
 }
 
 async function fetchReferenceEntriesForSource(
@@ -612,9 +590,10 @@ async function fetchReferenceEntriesForSource(
   now: Date,
   region: ModelReferenceRegion,
 ): Promise<ModelReferenceEntryInsert[]> {
-  if (source === 'datalearner') return await fetchDataLearnerEntries(now, region);
+  if (source === 'rele') return await fetchReleEntries(now, region);
   return [];
 }
+
 
 async function replaceReferenceEntries(
   db: Db,

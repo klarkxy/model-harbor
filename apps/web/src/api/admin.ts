@@ -402,6 +402,7 @@ export interface ModelReferenceEntry {
   latencyMs: number | null;
   sourceUrl: string;
   rawUnit: string | null;
+  rank: number | null;
   fetchedAt: string;
   updatedAt: string;
 }

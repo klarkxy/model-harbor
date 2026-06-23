@@ -2,11 +2,13 @@
 import { computed, h, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {
+  NAlert,
   NButton,
   NCard,
   NDataTable,
   NEmpty,
   NInput,
+  NModal,
   NSelect,
   NSpace,
   NTag,
@@ -23,7 +25,11 @@ import {
 type SortOrder = 'ascend' | 'descend' | false;
 type SortState = { columnKey: string | number; order: SortOrder } | null;
 
-const { t } = useI18n();
+const RELE_REPO_URL = 'https://github.com/jeinlee1991/chinese-llm-benchmark';
+const RELE_LEADERBOARD_URL = 'https://github.com/jeinlee1991/chinese-llm-benchmark/blob/main/leaderboard/alldata.md';
+const RELE_ATTRIBUTION_KEY = 'modelharbor.rele.attributionAcknowledged';
+
+const { t, locale } = useI18n();
 const message = useMessage();
 const loading = ref(false);
 const refreshing = ref(false);
@@ -33,17 +39,18 @@ const sortState = ref<SortState>(null);
 const query = ref('');
 const selectedMetric = ref('all');
 const selectedProvider = ref('all');
+const attributionModalVisible = ref(false);
 
 const preferredScoreKeys = [
-  'intelligence',
-  'chat',
-  'knowledge',
-  'math',
-  'chinese',
-  'reasoning',
+  '总分',
+  '教育',
+  '医疗与心理健康',
+  '金融',
+  '法律与行政公务',
+  '推理与数学计算',
+  '语言与指令遵从',
+  'agent与工具调用',
   'coding',
-  'agentic',
-  'costEfficiency',
 ] as const;
 
 function score(entry: ModelReferenceEntry, key: string): string {
@@ -56,9 +63,22 @@ function scoreValue(entry: ModelReferenceEntry, key: string): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+function priceDisplay(entry: ModelReferenceEntry): string | null {
+  const value = entry.price?.display;
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function priceCnyPerMTok(entry: ModelReferenceEntry): number | null {
+  const value = entry.price?.cnyPerMTok;
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
 function sortValue(entry: ModelReferenceEntry, key: string | number): string | number | null {
   if (key === 'displayName') return entry.displayName || entry.normalizedModelName || null;
   if (key === 'provider') return entry.provider || null;
+  if (key === 'rank') return entry.rank;
+  if (key === 'priceDisplay') return priceCnyPerMTok(entry) ?? priceDisplay(entry);
+  if (key === 'rawUnit') return entry.rawUnit;
   if (typeof key === 'string') return scoreValue(entry, key);
   return null;
 }
@@ -133,12 +153,36 @@ const filteredItems = computed(() => {
   });
 });
 
+function shouldShowAttribution(): boolean {
+  try {
+    return window.localStorage.getItem(RELE_ATTRIBUTION_KEY) !== 'ack';
+  } catch {
+    return true;
+  }
+}
+
+function acknowledgeAttribution(): void {
+  try {
+    window.localStorage.setItem(RELE_ATTRIBUTION_KEY, 'ack');
+  } catch {
+    /* storage may be disabled; the modal will simply reappear next visit */
+  }
+  attributionModalVisible.value = false;
+}
+
+function maybeShowAttribution(): void {
+  if (shouldShowAttribution() && items.value.length > 0) {
+    attributionModalVisible.value = true;
+  }
+}
+
 async function refreshList(): Promise<void> {
   loading.value = true;
   try {
     const res = await modelReferenceApi.list();
     items.value = res.items;
     sync.value = res.sync;
+    maybeShowAttribution();
   } catch (err) {
     message.error((err as Error).message);
   } finally {
@@ -153,6 +197,7 @@ async function refreshRemote(): Promise<void> {
     items.value = res.items.items;
     sync.value = res.items.sync;
     message.success(t('modelReference.refreshed'));
+    maybeShowAttribution();
   } catch (err) {
     message.error((err as Error).message);
     await refreshList();
@@ -198,7 +243,12 @@ const pagination = computed(() => ({
   pageSizes: [20, 50, 100],
 }));
 
-const tableScrollX = computed(() => Math.max(760, 470 + visibleScoreKeys.value.length * 104));
+const tableScrollX = computed(() => {
+  // Fixed columns: model(300) + provider(130) + rank(80) + priceDisplay(110) + rawUnit(160)
+  // = 780 plus 96 per score column.
+  const fixed = 780;
+  return Math.max(960, fixed + visibleScoreKeys.value.length * 96);
+});
 
 const columns = computed<DataTableColumns<ModelReferenceEntry>>(() => [
   {
@@ -227,12 +277,36 @@ const columns = computed<DataTableColumns<ModelReferenceEntry>>(() => [
   {
     title: t('modelReference.columns.provider'),
     key: 'provider',
-    width: 170,
+    width: 130,
     render: (row) => row.provider ?? '-',
     sorter: true,
     sortOrder: sortState.value?.columnKey === 'provider' ? sortState.value.order : false,
   },
-  ...visibleScoreKeys.value.map((key) => scoreColumn(key, key === 'costEfficiency' ? 120 : 100)),
+  {
+    title: t('modelReference.columns.rank'),
+    key: 'rank',
+    width: 80,
+    sorter: true,
+    sortOrder: sortState.value?.columnKey === 'rank' ? sortState.value.order : false,
+    render: (row) => (typeof row.rank === 'number' ? `#${row.rank}` : '-'),
+  },
+  {
+    title: t('modelReference.columns.priceDisplay'),
+    key: 'priceDisplay',
+    width: 110,
+    sorter: true,
+    sortOrder: sortState.value?.columnKey === 'priceDisplay' ? sortState.value.order : false,
+    render: (row) => priceDisplay(row) ?? '-',
+  },
+  ...visibleScoreKeys.value.map((key) => scoreColumn(key, 96)),
+  {
+    title: t('modelReference.columns.rawUnit'),
+    key: 'rawUnit',
+    width: 160,
+    sorter: true,
+    sortOrder: sortState.value?.columnKey === 'rawUnit' ? sortState.value.order : false,
+    render: (row) => row.rawUnit ?? '-',
+  },
 ]);
 
 function syncLabel(row: ModelReferenceSyncStatus): string {
@@ -250,6 +324,12 @@ function resetFilters(): void {
 <template>
   <div class="page">
     <NCard>
+      <NAlert type="info" :show-icon="true" style="margin-bottom: 16px" closable>
+        <template #header>{{ t('modelReference.attribution.title') }}</template>
+        {{ t('modelReference.attribution.body') }}
+        <a :href="RELE_REPO_URL" target="_blank" rel="noreferrer">{{ RELE_REPO_URL }}</a>
+      </NAlert>
+
       <NSpace align="center" justify="space-between" style="margin-bottom: 16px">
         <NSpace align="center" wrap>
           <NText strong>{{ t('modelReference.title') }}</NText>
@@ -299,6 +379,31 @@ function resetFilters(): void {
         @update:sorter="onSorterUpdate"
       />
     </NCard>
+
+    <NModal
+      v-model:show="attributionModalVisible"
+      preset="card"
+      :title="t('modelReference.attribution.modalTitle')"
+      style="max-width: 640px"
+      :mask-closable="false"
+      :closable="true"
+      @close="acknowledgeAttribution"
+    >
+      <p style="margin-top: 0">{{ t('modelReference.attribution.body') }}</p>
+      <p>
+        <a :href="RELE_REPO_URL" target="_blank" rel="noreferrer">{{ RELE_REPO_URL }}</a>
+      </p>
+      <p style="margin-bottom: 0; color: var(--text-color-3); font-size: 13px">
+        {{ t('modelReference.attribution.cite', { repo: RELE_REPO_URL, leaderboard: RELE_LEADERBOARD_URL }) }}
+      </p>
+      <template #footer>
+        <NSpace justify="end">
+          <NButton type="primary" @click="acknowledgeAttribution">
+            {{ t('modelReference.attribution.acknowledge') }}
+          </NButton>
+        </NSpace>
+      </template>
+    </NModal>
   </div>
 </template>
 
