@@ -69,6 +69,7 @@ const messages = {
       apps: 'Приложения',
       usage: 'Использование',
       settings: 'Настройки',
+      login: 'Войти',
     },
     user: {
       signOut: 'Выйти',
@@ -294,6 +295,19 @@ const messages = {
     },
   },
   modelReference: {
+    columns: {
+      intelligence: 'Интеллект',
+      chat: 'Чат',
+      knowledge: 'Знания',
+      math: 'Математика',
+      chinese: 'Китайский',
+      reasoning: 'Рассуждение',
+      coding: 'Код',
+      agentic: 'Агенты',
+      costEfficiency: 'Эффективность цены',
+      price: 'Цена',
+      context: 'Контекст',
+    },
     compare: {
       title: 'Сравнить модели',
       selectPlaceholder: 'Выберите до 3 моделей для сравнения',

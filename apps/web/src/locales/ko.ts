@@ -69,6 +69,7 @@ const messages = {
       apps: '앱',
       usage: '사용량',
       settings: '설정',
+      login: '로그인',
     },
     user: {
       signOut: '로그아웃',
@@ -294,6 +295,19 @@ const messages = {
     },
   },
   modelReference: {
+    columns: {
+      intelligence: '지능',
+      chat: '채팅',
+      knowledge: '지식',
+      math: '수학',
+      chinese: '중국어',
+      reasoning: '추론',
+      coding: '코딩',
+      agentic: '에이전트',
+      costEfficiency: '비용 효율',
+      price: '가격',
+      context: '컨텍스트',
+    },
     compare: {
       title: '모델 비교',
       selectPlaceholder: '비교할 모델을 최대 3개까지 선택',

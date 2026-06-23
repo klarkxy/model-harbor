@@ -69,6 +69,7 @@ const messages = {
       apps: '應用程式',
       usage: '用量',
       settings: '設定',
+      login: '登入',
     },
     user: {
       signOut: '登出',
@@ -293,6 +294,19 @@ const messages = {
     },
   },
   modelReference: {
+    columns: {
+      intelligence: '智慧',
+      chat: '對話',
+      knowledge: '知識',
+      math: '數學',
+      chinese: '中文',
+      reasoning: '推理',
+      coding: '程式碼',
+      agentic: '智能體',
+      costEfficiency: '性價比',
+      price: '價格',
+      context: '上下文',
+    },
     compare: {
       title: '模型對比',
       selectPlaceholder: '最多選擇 3 個模型對比',

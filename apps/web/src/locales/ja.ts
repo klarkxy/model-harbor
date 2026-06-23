@@ -69,6 +69,7 @@ const messages = {
       apps: 'アプリ',
       usage: '使用量',
       settings: '設定',
+      login: 'サインイン',
     },
     user: {
       signOut: 'サインアウト',
@@ -294,6 +295,19 @@ const messages = {
     },
   },
   modelReference: {
+    columns: {
+      intelligence: '知能',
+      chat: 'チャット',
+      knowledge: '知識',
+      math: '数学',
+      chinese: '中国語',
+      reasoning: '推論',
+      coding: 'コーディング',
+      agentic: 'エージェント',
+      costEfficiency: 'コスト効率',
+      price: '価格',
+      context: 'コンテキスト',
+    },
     compare: {
       title: 'モデルを比較',
       selectPlaceholder: '比較するモデルを最大 3 つ選択',

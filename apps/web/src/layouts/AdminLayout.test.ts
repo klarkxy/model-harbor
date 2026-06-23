@@ -20,7 +20,12 @@ function mountApp() {
     history: createMemoryHistory(),
     routes: [
       { path: '/', name: 'overview', component: { template: '<div>overview</div>' } },
-      { path: '/login', name: 'login', component: { template: '<div>login</div>' } },
+      {
+        path: '/login',
+        name: 'login',
+        component: { template: '<div>login</div>' },
+        meta: { standalone: true },
+      },
       { path: '/public-models', name: 'public-models', component: { template: '<div>public-models</div>' } },
       { path: '/settings', name: 'settings', component: { template: '<div>settings</div>' } },
       { path: '/usage', name: 'usage', component: { template: '<div>usage</div>' } },

@@ -69,6 +69,7 @@ const messages = {
       apps: 'Applications',
       usage: 'Utilisation',
       settings: 'Paramètres',
+      login: 'Connexion',
     },
     user: {
       signOut: 'Se déconnecter',
@@ -294,6 +295,19 @@ const messages = {
     },
   },
   modelReference: {
+    columns: {
+      intelligence: 'Intelligence',
+      chat: 'Chat',
+      knowledge: 'Connaissance',
+      math: 'Maths',
+      chinese: 'Chinois',
+      reasoning: 'Raisonnement',
+      coding: 'Code',
+      agentic: 'Agentique',
+      costEfficiency: 'Efficience coût',
+      price: 'Prix',
+      context: 'Contexte',
+    },
     compare: {
       title: 'Comparer les modèles',
       selectPlaceholder: 'Sélectionnez jusqu’à 3 modèles à comparer',
