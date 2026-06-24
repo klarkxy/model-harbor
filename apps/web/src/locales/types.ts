@@ -9,8 +9,10 @@ export interface Messages {
       publicModels: string;
       modelGroups: string;
       apps: string;
+      backups: string;
       usage: string;
       settings: string;
+      setup: string;
       login: string;
     };
   };
@@ -103,10 +105,52 @@ export interface Messages {
     name: string;
     prefix: string;
     accessMode: string;
+    accessModeAll: string;
+    accessModeRestricted: string;
+    accessTargets: string;
     enabled: string;
+    edit: string;
     rotate: string;
     revoke: string;
     confirmDelete: string;
+  };
+  backups: {
+    title: string;
+    create: string;
+    filename: string;
+    type: string;
+    size: string;
+    schemaVersion: string;
+    note: string;
+    full: string;
+    config: string;
+    restore: string;
+    restored: string;
+    confirm: string;
+    confirmRequired: string;
+  };
+  setup: {
+    title: string;
+    steps: {
+      security: string;
+      upstream: string;
+      models: string;
+      consumerKey: string;
+      test: string;
+    };
+    unsafeSecret: string;
+    invalidCredentials: string;
+    supportedModels: string;
+    supportedModelsPlaceholder: string;
+    realModelName: string;
+    addModel: string;
+    atLeastOneModel: string;
+    consumerKeyHint: string;
+    createConsumerKey: string;
+    consumerKeyCreated: string;
+    testModel: string;
+    generateCurl: string;
+    finish: string;
   };
   usage: {
     title: string;
@@ -134,5 +178,7 @@ export interface Messages {
     actions: string;
     yes: string;
     no: string;
+    next: string;
+    prev: string;
   };
 }

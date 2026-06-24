@@ -44,6 +44,12 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'layout.menu.apps' },
       },
       {
+        path: '/backups',
+        name: 'backups',
+        component: () => import('../pages/Backups.vue'),
+        meta: { titleKey: 'layout.menu.backups' },
+      },
+      {
         path: '/usage',
         name: 'usage',
         component: () => import('../pages/Usage.vue'),
@@ -54,6 +60,12 @@ const routes: RouteRecordRaw[] = [
         name: 'settings',
         component: () => import('../pages/Settings.vue'),
         meta: { titleKey: 'layout.menu.settings' },
+      },
+      {
+        path: '/setup',
+        name: 'setup',
+        component: () => import('../pages/SetupWizard.vue'),
+        meta: { titleKey: 'layout.menu.setup' },
       },
     ],
   },

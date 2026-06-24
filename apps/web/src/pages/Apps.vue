@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, h } from 'vue';
+import { ref, onMounted, computed, h } from 'vue';
 import { useMessage } from 'naive-ui';
 import {
   NCard,
@@ -15,18 +15,25 @@ import {
   NTag,
   NText,
   NPopconfirm,
+  NSelect,
+  type SelectOption,
+  type SelectGroupOption,
 } from 'naive-ui';
 import { useI18n } from 'vue-i18n';
 import { listApps, createApp, updateApp, deleteApp } from '../api/admin/apps.js';
 import {
   listConsumerKeysByApp,
   createConsumerKey,
+  getConsumerKey,
+  updateConsumerKey,
   rotateConsumerKey,
   revokeConsumerKey,
   deleteConsumerKey,
+  type ConsumerKeyWithAccess,
 } from '../api/admin/consumer-keys.js';
-import type { AppContract } from '@manageyourllm/contracts';
-import type { ConsumerKeyContract } from '@manageyourllm/contracts';
+import { listPublicModels } from '../api/admin/public-models.js';
+import { listModelGroups } from '../api/admin/model-groups.js';
+import type { AppContract, ConsumerKeyContract } from '@manageyourllm/contracts';
 import type { DataTableColumns } from 'naive-ui';
 
 const { t } = useI18n();
@@ -45,6 +52,44 @@ const rawKeyModal = ref<{ show: boolean; title: string; rawKey: string }>({
   title: '',
   rawKey: '',
 });
+
+const publicModels = ref<Array<{ id: string; name: string }>>([]);
+const modelGroups = ref<Array<{ id: string; name: string }>>([]);
+
+const keyModal = ref<{
+  show: boolean;
+  appId: string;
+  editing: ConsumerKeyContract | null;
+  form: { name: string; accessMode: 'all' | 'restricted'; enabled: boolean; selectedTargets: string[] };
+  loading: boolean;
+}>({
+  show: false,
+  appId: '',
+  editing: null,
+  form: { name: '', accessMode: 'all', enabled: true, selectedTargets: [] },
+  loading: false,
+});
+
+const targetOptions = computed<(SelectGroupOption | SelectOption)[]>(() => [
+  {
+    type: 'group',
+    label: t('publicModels.title'),
+    key: 'public_models',
+    children: publicModels.value.map((m) => ({ label: m.name, value: `public_model:${m.id}` })),
+  },
+  {
+    type: 'group',
+    label: t('modelGroups.title'),
+    key: 'model_groups',
+    children: modelGroups.value.map((g) => ({ label: g.name, value: `model_group:${g.id}` })),
+  },
+]);
+
+async function loadTargets() {
+  const [models, groups] = await Promise.all([listPublicModels(), listModelGroups()]);
+  publicModels.value = models.map((m) => ({ id: m.id, name: m.displayName || m.name }));
+  modelGroups.value = groups.map((g) => ({ id: g.id, name: g.displayName || g.name }));
+}
 
 async function loadApps() {
   loading.value = true;
@@ -114,6 +159,48 @@ async function createKey(app: AppContract) {
   }
 }
 
+async function openKeyEdit(appId: string, key: ConsumerKeyContract) {
+  keyModal.value = {
+    show: true,
+    appId,
+    editing: key,
+    form: { name: key.name, accessMode: key.accessMode, enabled: key.enabled, selectedTargets: [] },
+    loading: true,
+  };
+  try {
+    const detail: ConsumerKeyWithAccess = await getConsumerKey(key.id);
+    keyModal.value.form.selectedTargets = detail.access.map(
+      (a) => `${a.targetType}:${a.targetId}`,
+    );
+  } finally {
+    keyModal.value.loading = false;
+  }
+}
+
+async function onSaveKey() {
+  const { editing, appId, form } = keyModal.value;
+  if (!editing) return;
+  const body: Parameters<typeof updateConsumerKey>[1] = {
+    name: form.name,
+    accessMode: form.accessMode,
+    enabled: form.enabled,
+  };
+  if (form.accessMode === 'restricted') {
+    body.accessTargets = form.selectedTargets.map((value) => {
+      const [targetType, ...rest] = value.split(':');
+      return { targetType: targetType as 'public_model' | 'model_group', targetId: rest.join(':') };
+    });
+  }
+  try {
+    await updateConsumerKey(editing.id, body);
+    keyModal.value.show = false;
+    await loadConsumerKeys(appId);
+    message.success(t('common.saved'));
+  } catch (err) {
+    message.error(err instanceof Error ? err.message : t('common.saveFailed'));
+  }
+}
+
 async function rotateKey(appId: string, key: ConsumerKeyContract) {
   try {
     const res = await rotateConsumerKey(key.id);
@@ -172,7 +259,10 @@ const columns: DataTableColumns<AppContract> = [
   },
 ];
 
-onMounted(loadApps);
+onMounted(async () => {
+  await loadTargets();
+  await loadApps();
+});
 </script>
 
 <template>
@@ -215,6 +305,40 @@ onMounted(loadApps);
         </template>
       </NModal>
 
+      <NModal v-model:show="keyModal.show" :title="t('consumerKeys.edit')" preset="card" style="width: 560px">
+        <NSpin :show="keyModal.loading">
+          <NForm label-placement="left" label-width="120px">
+            <NFormItem :label="t('consumerKeys.name')">
+              <NInput v-model:value="keyModal.form.name" />
+            </NFormItem>
+            <NFormItem :label="t('consumerKeys.enabled')">
+              <NSwitch v-model:value="keyModal.form.enabled" />
+            </NFormItem>
+            <NFormItem :label="t('consumerKeys.accessMode')">
+              <NSelect
+                v-model:value="keyModal.form.accessMode"
+                :options="[
+                  { label: t('consumerKeys.accessModeAll'), value: 'all' },
+                  { label: t('consumerKeys.accessModeRestricted'), value: 'restricted' },
+                ]"
+              />
+            </NFormItem>
+            <NFormItem v-if="keyModal.form.accessMode === 'restricted'" :label="t('consumerKeys.accessTargets')">
+              <NSelect
+                v-model:value="keyModal.form.selectedTargets"
+                multiple
+                :options="targetOptions"
+                :placeholder="t('consumerKeys.accessTargets')"
+              />
+            </NFormItem>
+          </NForm>
+        </NSpin>
+        <NSpace justify="end">
+          <NButton @click="keyModal.show = false">{{ t('common.cancel') }}</NButton>
+          <NButton type="primary" :loading="keyModal.loading" @click="onSaveKey">{{ t('common.save') }}</NButton>
+        </NSpace>
+      </NModal>
+
       <NCard v-for="app in apps" :key="`keys-${app.id}`" :title="`${app.name} - ${t('apps.consumerKeys')}`" size="small">
         <NDataTable
           :data="consumerKeyMap[app.id] ?? []"
@@ -230,6 +354,7 @@ onMounted(loadApps);
               render(row) {
                 return h(NSpace, { size: 'small' }, {
                   default: () => [
+                    h(NButton, { size: 'small', onClick: () => openKeyEdit(app.id, row) }, { default: () => t('common.edit') }),
                     h(NButton, { size: 'small', onClick: () => rotateKey(app.id, row) }, { default: () => t('consumerKeys.rotate') }),
                     h(NButton, { size: 'small', onClick: () => revokeKey(app.id, row) }, { default: () => t('consumerKeys.revoke') }),
                     h(NPopconfirm, { onPositiveClick: () => removeKey(app.id, row) }, {

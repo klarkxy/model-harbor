@@ -32,8 +32,10 @@ const menuOptions = computed<MenuOption[]>(() => [
   { key: 'public-models', label: t('layout.menu.publicModels') },
   { key: 'model-groups', label: t('layout.menu.modelGroups') },
   { key: 'apps', label: t('layout.menu.apps') },
+  { key: 'backups', label: t('layout.menu.backups') },
   { key: 'usage', label: t('layout.menu.usage') },
   { key: 'settings', label: t('layout.menu.settings') },
+  { key: 'setup', label: t('layout.menu.setup') },
 ]);
 
 const activeKey = computed<string>(() =>

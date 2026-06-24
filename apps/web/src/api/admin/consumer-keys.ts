@@ -20,6 +20,11 @@ export async function listConsumerKeysByApp(appId: string): Promise<ConsumerKeyC
   return res.data;
 }
 
+export async function getConsumerKey(id: string): Promise<ConsumerKeyWithAccess> {
+  const res = await api.get<{ data: ConsumerKeyWithAccess }>(`/api/admin/consumer-keys/${id}`);
+  return res.data;
+}
+
 export async function createConsumerKey(body: CreateConsumerKeyRequest): Promise<CreateConsumerKeyResponse> {
   const res = await api.post<{ data: CreateConsumerKeyResponse }>('/api/admin/consumer-keys', body);
   return res.data;
