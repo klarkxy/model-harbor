@@ -508,22 +508,23 @@ descriptor 不应保存用户 secret。上游 key 行保存用户配置、密文
 
 ## 7. 数据访问与事务
 
-参考 cc-switch 的 DAO 方式，新项目建议按 aggregate 建 repository：
+参考 cc-switch 的 DAO 方式，新项目按 aggregate 建 repository。Phase 1 落地后的 repository 目录如下：
 
 ```text
-repositories/
+infrastructure/db/repositories/
   admin-user.repository.ts
   app.repository.ts
   consumer-key.repository.ts
   upstream-key.repository.ts
+  provider-preset.repository.ts
   target.repository.ts
   public-model.repository.ts
   model-group.repository.ts
-  routing.repository.ts
-  quota.repository.ts
-  sticky.repository.ts
-  circuit-breaker.repository.ts
-  observability.repository.ts
+  routing-state.repository.ts   # sticky / breaker / endpoint health 合并
+  observability.repository.ts   # usage / trace / debug content / audit / daily stats
+  cost-ledger.repository.ts     # pricing / plans
+  model-reference.repository.ts
+  backup.repository.ts
   settings.repository.ts
 ```
 

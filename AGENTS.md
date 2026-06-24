@@ -1,12 +1,12 @@
 # ManageYourLLM 重构分支 — AGENTS.md
 
-本文件面向 AI 编码助手。阅读前请知悉：当前仓库（`llm-router-rebuild-clean`）**已完成 Phase 0（Foundation）**，拥有可安装、可测试、可构建的 monorepo 骨架，但尚未实现业务领域逻辑（数据库、路由、网关、管理 UI 等）。下文基于仓库中实际存在的文档与代码整理。
+本文件面向 AI 编码助手。阅读前请知悉：当前仓库（`llm-router-rebuild-clean`）**已完成 Phase 1（Domain & Data）**，已落地 SQLite schema（v1）、repository / unit-of-work、核心 domain/application service 与对应测试。下文基于仓库中实际存在的文档与代码整理。
 
 ## 项目概述
 
 - **产品名**：ManageYourLLM（中文定位：管理你的大模型）。
 - **仓库定位**：`codex/rebuild-clean` 分支，是旧项目 `D:\0 code\llm-router` 的重建规划仓库，参考项目 `reference/cc-switch` 位于旧项目目录内。
-- **当前状态**：Phase 0 已完成。已创建 pnpm workspace、`packages/shared`、`packages/contracts`、`apps/api`、`apps/web`、ESLint/Prettier/Vitest/Playwright 配置、Dockerfile、`.env.example`、中文 README。源码目录和构建配置已落地，但数据库、domain、application、infrastructure、gateway 等尚未实现。
+- **当前状态**：Phase 1 已完成。在 Phase 0 骨架基础上，已落地 SQLite schema（v1）、显式 migration runner、repository / unit-of-work、核心 domain/application service（auth、upstream secret、consumer key、access policy、public model、model group、cost-ledger、backup）以及对应的测试。API 启动时会自动初始化 schema 和默认设置。
 - **目标**：按阶段从零重建 ManageYourLLM，保留已验证的产品能力，改用更清晰的分层与模块边界，而非一次性搬迁旧代码。
 
 ## 产品定位与边界
@@ -19,11 +19,11 @@
 ## 已落地的技术栈
 
 - **后端**：Node.js + TypeScript + Fastify 5。
-- **数据库**：SQLite 长期主数据库 + Drizzle/libsql（依赖已声明，Schema 与 repository 在 Phase 1 实现）。
+- **数据库**：SQLite 长期主数据库 + Drizzle/libsql；Schema v1、migration runner、repository、unit-of-work 已实现。
 - **前端**：Vue 3 + Vite + Naive UI + Pinia。
 - **Monorepo**：pnpm workspace。
 - **契约与校验**：Zod 共享 schema。
-- **测试**：Vitest + Playwright。
+- **测试**：Vitest + Playwright。Phase 1 已新增 repository、domain、application 层单元测试。
 - **部署**：Node 直跑和 Docker 都支持；公网/生产推荐 Docker。单进程一体化部署，同端口服务管理 UI、管理 API、网关 API、健康检查，并运行后台维护任务。
 
 ### 目录结构
@@ -39,7 +39,7 @@ docs/        架构、产品决策、阶段计划与 TODO
 e2e/         Playwright 端到端测试（占位）
 ```
 
-后端内部进一步按 `server/routes -> application -> domain -> infrastructure` 分层，核心依赖方向禁止 `domain` 导入 Fastify/Drizzle/Vue 等实现细节。Phase 0 仅创建了 `server/` 与 `config/`，`domain/`、`application/`、`infrastructure/` 目录将在 Phase 1 创建。
+后端内部进一步按 `server/routes -> application -> domain -> infrastructure` 分层，核心依赖方向禁止 `domain` 导入 Fastify/Drizzle/Vue 等实现细节。Phase 1 已创建 `infrastructure/db`、`domain/`、`application/` 目录并落地核心实现。
 
 ## 文档清单
 
@@ -70,7 +70,7 @@ e2e/         Playwright 端到端测试（占位）
   - `pnpm test` — 运行单元测试
   - `pnpm lint` / `pnpm format` / `pnpm format:check` — 代码质量
   - `pnpm e2e` / `pnpm e2e:install` — Playwright（占位）
-- Phase 0 验收基线：`pnpm install` / `pnpm typecheck` / `pnpm test` 成功，并能启动 API health 与 Web shell。
+- Phase 1 验收基线：`pnpm install` / `pnpm typecheck` / `pnpm test` / `pnpm lint` / `pnpm format:check` / `pnpm build` 成功；API 启动后可自动建表并查询到 schema version 1。
 
 ## 代码组织（计划）
 
@@ -81,9 +81,9 @@ apps/api/src/
   main.ts
   server/          # Fastify 路由、插件、全局错误处理
   config/          # 环境变量解析
-  domain/          # 纯领域逻辑，不依赖框架（Phase 1 创建）
-  application/     # 应用服务，编排 domain + repository 接口（Phase 1+ 创建）
-  infrastructure/  # 数据库、provider adapter、上游发送、日志等实现（Phase 1+ 创建）
+  domain/          # 纯领域逻辑，不依赖框架（Phase 1 已实现 auth、upstream secret、consumer key、access policy、model-catalog、cost-ledger、backup）
+  application/     # 应用服务，编排 domain + repository（Phase 1 已实现 admin-auth、upstream-key）
+  infrastructure/  # 数据库、repository、unit-of-work 已实现；provider adapter、上游发送、日志等后续阶段补充
   contracts/       # 管理 API / 网关 API 契约（优先使用 packages/contracts）
 ```
 
@@ -160,7 +160,7 @@ apps/web/src/
 ## 给后续 Agent 的行动建议
 
 1. 做任何改动前请先通读 `docs/architecture-rebuild.md` 和 `docs/product-decisions.md`，它们优先于旧项目的默认假设。
-2. 当前阶段应是 Phase 1（Domain & Data）：按 `docs/plans/todos/phase-1-domain-data.todo.md` 推进，不要跳到后续阶段。
+2. Phase 1（Domain & Data）已完成。下一步进入 Phase 2（Admin Console）：按 `docs/plans/todos/phase-2-admin-console.todo.md` 推进，不要跳到后续阶段。
 3. 不要假设旧项目代码可以直接复制；新分支要求重新分层。
 4. 计划更新时必须写入 `docs/` 中的对应文件，不要只留在聊天记录里。
 5. 保持中文文档和中文 UI 优先，同时保留 i18n 扩展结构。

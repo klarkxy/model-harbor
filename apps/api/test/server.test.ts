@@ -6,7 +6,11 @@ describe('buildServer', () => {
   let app: FastifyInstance;
 
   beforeAll(async () => {
-    app = await buildServer({ disableBackgroundJobs: true, logger: false });
+    app = await buildServer({
+      disableBackgroundJobs: true,
+      logger: false,
+      databaseUrl: ':memory:',
+    });
   });
 
   afterAll(async () => {

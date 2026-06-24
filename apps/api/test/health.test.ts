@@ -8,7 +8,11 @@ describe('health routes', () => {
   let app: FastifyInstance;
 
   beforeAll(async () => {
-    app = await buildServer({ disableBackgroundJobs: true, logger: false });
+    app = await buildServer({
+      disableBackgroundJobs: true,
+      logger: false,
+      databaseUrl: ':memory:',
+    });
   });
 
   afterAll(async () => {
@@ -21,7 +25,7 @@ describe('health routes', () => {
     expect(JSON.parse(res.payload)).toEqual({ status: 'ok' });
   });
 
-  it('/readyz returns ok when no database is wired', async () => {
+  it('/readyz returns ok when database is wired', async () => {
     const res = await app.inject({ method: 'GET', url: '/readyz' });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.payload)).toEqual({ status: 'ok' });

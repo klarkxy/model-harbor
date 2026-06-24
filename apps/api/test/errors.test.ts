@@ -7,7 +7,11 @@ describe('error handler', () => {
   let app: FastifyInstance;
 
   beforeAll(async () => {
-    app = await buildServer({ disableBackgroundJobs: true, logger: false });
+    app = await buildServer({
+      disableBackgroundJobs: true,
+      logger: false,
+      databaseUrl: ':memory:',
+    });
     app.get('/auth-error', async () => {
       throw new AuthenticationError('bad credentials');
     });
