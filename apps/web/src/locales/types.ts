@@ -1,6 +1,3 @@
-// 用于类型推断的消息结构。Phase 0 只提供最小骨架，
-// 后续阶段按页面逐步扩展。
-
 export interface Messages {
   layout: {
     brand: string;
@@ -22,26 +19,120 @@ export interface Messages {
     username: string;
     password: string;
     submit: string;
+    failed: string;
   };
   overview: {
     title: string;
+    upstreamKeys: string;
+    publicModels: string;
+    modelGroups: string;
+    apps: string;
+    consumerKeys: string;
+    backups: string;
   };
   upstreamKeys: {
     title: string;
+    create: string;
+    edit: string;
+    name: string;
+    providerType: string;
+    providerPreset: string;
+    baseUrl: string;
+    apiKey: string;
+    newApiKey: string;
+    apiKeyPrefix: string;
+    enabled: string;
+    status: string;
+    active: string;
+    frozen: string;
+    disabled: string;
+    freeze: string;
+    unfreeze: string;
+    rotate: string;
+    manualFreeze: string;
+    confirmDelete: string;
   };
   publicModels: {
     title: string;
+    create: string;
+    edit: string;
+    name: string;
+    displayName: string;
+    description: string;
+    enabled: string;
+    candidates: string;
+    upstreamKey: string;
+    realModelName: string;
+    priority: string;
+    weight: string;
+    addCandidate: string;
+    confirmDelete: string;
   };
   modelGroups: {
     title: string;
+    create: string;
+    edit: string;
+    name: string;
+    displayName: string;
+    description: string;
+    enabled: string;
+    members: string;
+    publicModel: string;
+    priority: string;
+    weight: string;
+    addMember: string;
+    confirmDelete: string;
   };
   apps: {
     title: string;
+    create: string;
+    edit: string;
+    name: string;
+    description: string;
+    enabled: string;
+    consumerKeys: string;
+    createKey: string;
+    defaultKeyName: string;
+    newKeyCreated: string;
+    keyRotated: string;
+    rawKey: string;
+    rawKeyWarning: string;
+    confirmDelete: string;
+  };
+  consumerKeys: {
+    name: string;
+    prefix: string;
+    accessMode: string;
+    enabled: string;
+    rotate: string;
+    revoke: string;
+    confirmDelete: string;
   };
   usage: {
     title: string;
   };
   settings: {
     title: string;
+    publicBaseUrl: string;
+    gatewayBasePath: string;
+    defaultRequestTimeoutMs: string;
+    defaultRetries: string;
+    enableStickySession: string;
+    enableCircuitBreaker: string;
+  };
+  common: {
+    save: string;
+    saved: string;
+    saveFailed: string;
+    delete: string;
+    deleted: string;
+    deleteFailed: string;
+    cancel: string;
+    close: string;
+    edit: string;
+    create: string;
+    actions: string;
+    yes: string;
+    no: string;
   };
 }

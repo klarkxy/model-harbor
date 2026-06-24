@@ -65,3 +65,4 @@ export type ModelGroupContract = z.infer<typeof modelGroupSchema>;
 export type ModelGroupMemberContract = z.infer<typeof modelGroupMemberSchema>;
 export type CreateModelGroupRequest = z.infer<typeof createModelGroupRequestSchema>;
 export type UpdateModelGroupRequest = z.infer<typeof updateModelGroupRequestSchema>;
+export type ReplaceMembersRequest = z.infer<typeof replaceMembersRequestSchema>;

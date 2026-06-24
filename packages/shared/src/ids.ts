@@ -1,5 +1,3 @@
-import { randomBytes } from 'node:crypto';
-
 const PREFIXES = {
   admin: 'adm',
   app: 'app',
@@ -31,6 +29,14 @@ const PREFIXES = {
 
 export type IdKind = keyof typeof PREFIXES;
 
+function bytesToBase64Url(bytes: Uint8Array): string {
+  // 使用 Web Crypto 的 getRandomValues，兼容浏览器和 Node 22+ 的 globalThis.crypto。
+  const binString = Array.from(bytes, (b) => String.fromCharCode(b)).join('');
+  const base64 = btoa(binString);
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
 export function generateId(kind: IdKind, byteLength = 16): string {
-  return `${PREFIXES[kind]}_${randomBytes(byteLength).toString('base64url')}`;
+  const bytes = globalThis.crypto.getRandomValues(new Uint8Array(byteLength));
+  return `${PREFIXES[kind]}_${bytesToBase64Url(bytes)}`;
 }

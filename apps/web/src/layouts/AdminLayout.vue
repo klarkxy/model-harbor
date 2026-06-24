@@ -16,11 +16,14 @@ import {
 import { RouterView, useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { PrismOutline } from '@vicons/ionicons5';
+import { LogOutOutline } from '@vicons/ionicons5';
 import { localeOptions, type SupportedLocale } from '../i18n/index.js';
+import { useAuthStore } from '../stores/auth.js';
 
 const route = useRoute();
 const router = useRouter();
 const { t, locale } = useI18n();
+const auth = useAuthStore();
 const collapsed = ref(false);
 
 const menuOptions = computed<MenuOption[]>(() => [
@@ -94,6 +97,12 @@ const currentLanguage = computed({
             size="small"
             style="width: 120px"
           />
+          <NButton size="small" quaternary @click="async () => { await auth.logout(); await router.push({ name: 'login' }); }">
+            <template #icon>
+              <NIcon><LogOutOutline /></NIcon>
+            </template>
+            {{ t('layout.menu.login') }}
+          </NButton>
         </NSpace>
       </NLayoutHeader>
       <NLayoutContent content-style="padding: 24px;">

@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
 import AdminLayout from '../layouts/AdminLayout.vue';
+import { useAuthStore } from '../stores/auth.js';
 
 const routes: RouteRecordRaw[] = [
   {
@@ -61,4 +62,18 @@ const routes: RouteRecordRaw[] = [
 export const router = createRouter({
   history: createWebHistory(),
   routes,
+});
+
+router.beforeEach(async (to) => {
+  if (to.meta.standalone) {
+    return true;
+  }
+  const auth = useAuthStore();
+  if (!auth.ready) {
+    await auth.fetchMe();
+  }
+  if (!auth.isAuthenticated) {
+    return { name: 'login', query: { redirect: to.fullPath } };
+  }
+  return true;
 });

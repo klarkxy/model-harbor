@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
+import { api } from '../api/client.js';
 
 export interface AdminSummary {
   id: string;
@@ -12,19 +13,29 @@ export const useAuthStore = defineStore('auth', () => {
   const ready = ref(false);
   const isAuthenticated = computed(() => user.value !== null);
 
-  async function login(_username: string, _password: string): Promise<void> {
-    // Phase 0 占位实现，后续阶段接入 contracts 与 API client。
-    user.value = { id: 'adm_placeholder', username: 'admin', displayName: 'Admin' };
-    ready.value = true;
+  async function login(username: string, password: string): Promise<void> {
+    await api.post('/api/admin/auth/login', { username, password });
+    await fetchMe();
   }
 
   async function logout(): Promise<void> {
-    user.value = null;
+    try {
+      await api.post('/api/admin/auth/logout');
+    } finally {
+      user.value = null;
+      ready.value = true;
+    }
   }
 
   async function fetchMe(): Promise<void> {
-    // Phase 0 占位实现。
-    ready.value = true;
+    try {
+      const me = await api.get<{ data: AdminSummary }>('/api/admin/auth/me');
+      user.value = me.data;
+    } catch {
+      user.value = null;
+    } finally {
+      ready.value = true;
+    }
   }
 
   return { user, ready, isAuthenticated, login, logout, fetchMe };
