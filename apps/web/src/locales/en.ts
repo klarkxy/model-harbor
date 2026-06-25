@@ -148,6 +148,7 @@ const messages: Messages = {
     config: 'Config',
     restore: 'Restore',
     restored: 'Restored',
+    restoredRequiresRestart: 'Database restored. Please restart the service to take effect.',
     confirm: 'Confirm restore',
     confirmRequired: 'Restore must be confirmed',
     delete: 'Delete',

@@ -65,9 +65,13 @@ async function onRestore() {
     return;
   }
   try {
-    await restoreBackup(restoreForm.value.id, { confirm: true });
+    const result = await restoreBackup(restoreForm.value.id, { confirm: true });
     restoreForm.value.show = false;
-    message.success(t('backups.restored'));
+    if (result.requiresRestart) {
+      message.warning(t('backups.restoredRequiresRestart'));
+    } else {
+      message.success(t('backups.restored'));
+    }
   } catch (err) {
     message.error(err instanceof Error ? err.message : t('common.saveFailed'));
   }

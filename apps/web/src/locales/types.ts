@@ -146,6 +146,7 @@ export interface Messages {
     config: string;
     restore: string;
     restored: string;
+    restoredRequiresRestart: string;
     confirm: string;
     confirmRequired: string;
     delete: string;

@@ -1,6 +1,8 @@
 import { copyFileSync, existsSync, mkdirSync, statSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
+import { createClient } from '@libsql/client';
 import { BackupRepository } from '../../infrastructure/db/repositories/backup.repository.js';
+import { restoreSnapshot } from '../backups/backup.service.js';
 import { UpstreamKeyRepository } from '../../infrastructure/db/repositories/upstream-key.repository.js';
 import { PublicModelRepository } from '../../infrastructure/db/repositories/public-model.repository.js';
 import { ModelGroupRepository } from '../../infrastructure/db/repositories/model-group.repository.js';
@@ -10,6 +12,7 @@ import type { BackupType } from '../../infrastructure/db/schema.js';
 
 export interface BackupServiceDeps {
   db: Db;
+  client?: { close(): void | Promise<void> };
   dbFilePath: string;
   backupsDir: string;
 }
@@ -55,8 +58,36 @@ export class BackupService {
     if (!backup) return false;
     const backupPath = join(this.deps.backupsDir, backup.filename);
     if (!existsSync(backupPath)) return false;
-    // 真实恢复需要先关闭数据库连接再替换文件；这里作为占位实现，仅验证确认标志。
-    // Phase 后续补充完整恢复流程。
+    if (this.deps.dbFilePath === ':memory:') {
+      throw new Error('内存数据库不支持恢复');
+    }
+
+    // 校验备份文件是有效 SQLite 数据库且 schema 版本一致。
+    const checkClient = createClient({ url: `file:${backupPath}` });
+    try {
+      await checkClient.execute('SELECT 1');
+      const versionResult = await checkClient.execute(
+        'SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1',
+      );
+      const version = versionResult.rows[0]?.version;
+      if (typeof version !== 'number' || version < 1) {
+        throw new Error('备份文件 schema 版本无效');
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('schema 版本无效')) {
+        throw err;
+      }
+      throw new Error('备份文件不是有效的 SQLite 数据库');
+    } finally {
+      await checkClient.close();
+    }
+
+    // 关闭当前数据库连接后替换文件，避免 Windows 下文件占用导致复制失败。
+    if (this.deps.client) {
+      await this.deps.client.close();
+    }
+
+    restoreSnapshot(backupPath, this.deps.dbFilePath, this.deps.backupsDir);
     return true;
   }
 

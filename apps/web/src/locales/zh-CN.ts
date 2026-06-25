@@ -148,6 +148,7 @@ const messages: Messages = {
     config: '配置',
     restore: '恢复',
     restored: '恢复成功',
+    restoredRequiresRestart: '数据库已恢复，请重新启动服务以完成生效',
     confirm: '确认恢复',
     confirmRequired: '必须确认恢复操作',
     delete: '删除',

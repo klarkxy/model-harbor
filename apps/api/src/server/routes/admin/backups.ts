@@ -13,6 +13,7 @@ import { z } from 'zod';
 
 export interface BackupRouteDeps {
   db: Db;
+  client?: { close(): void | Promise<void> };
   dbFilePath: string;
   backupsDir: string;
 }
@@ -35,7 +36,11 @@ export async function backupRoutes(app: FastifyInstance, deps: BackupRouteDeps):
     const { id } = req.params as { id: string };
     const body = restoreBackupRequestSchema.parse(req.body);
     const ok = await service.restoreBackup(id, body.confirm);
-    return successEnvelope(z.object({ ok: z.boolean() })).parse({ data: { ok } });
+    return successEnvelope(
+      z.object({ ok: z.boolean(), requiresRestart: z.boolean().optional() }),
+    ).parse({
+      data: { ok, requiresRestart: ok ? true : undefined },
+    });
   });
 
   app.delete('/:id', async (req) => {

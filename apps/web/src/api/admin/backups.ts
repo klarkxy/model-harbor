@@ -18,7 +18,7 @@ export async function createBackup(body: CreateBackupRequest): Promise<BackupCon
 export async function restoreBackup(
   id: string,
   body: RestoreBackupRequest,
-): Promise<{ ok: boolean }> {
+): Promise<{ ok: boolean; requiresRestart?: boolean }> {
   const res = await api.post<{ data: { ok: boolean } }>(`/api/admin/backups/${id}/restore`, body);
   return res.data;
 }
