@@ -621,7 +621,7 @@ export const dailyConsumptionStats = sqliteTable(
 export const MODEL_REFERENCE_REGIONS = ['global'] as const;
 export type ModelReferenceRegion = (typeof MODEL_REFERENCE_REGIONS)[number];
 
-export const MODEL_REFERENCE_SOURCES = ['rele'] as const;
+export const MODEL_REFERENCE_SOURCES = ['arena'] as const;
 export type ModelReferenceSource = (typeof MODEL_REFERENCE_SOURCES)[number];
 
 export const modelReferenceEntries = sqliteTable(
@@ -648,6 +648,8 @@ export const modelReferenceEntries = sqliteTable(
     sourceUrl: text('source_url'),
     rawJson: text('raw_json', { mode: 'json' }).$type<Record<string, unknown>>(),
     fetchedAt: integer('fetched_at', { mode: 'timestamp_ms' }).notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
   },
   (t) => [
     uniqueIndex('model_reference_entry_unique').on(t.region, t.source, t.normalizedModelName),

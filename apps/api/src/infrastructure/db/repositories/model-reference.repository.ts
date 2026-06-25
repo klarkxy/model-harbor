@@ -1,4 +1,4 @@
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, asc, sql } from 'drizzle-orm';
 import { generateId } from '@manageyourllm/shared';
 import type { Db } from '../client.js';
 import {
@@ -15,7 +15,10 @@ import {
 export class ModelReferenceRepository {
   constructor(private readonly db: Db) {}
 
-  async upsertEntry(data: Omit<ModelReferenceEntryInsert, 'id'>): Promise<ModelReferenceEntryRow> {
+  async upsertEntry(
+    data: Omit<ModelReferenceEntryInsert, 'id' | 'createdAt' | 'updatedAt'>,
+  ): Promise<ModelReferenceEntryRow> {
+    const now = new Date();
     const existing = await this.findEntry(data.region, data.source, data.normalizedModelName);
     if (existing) {
       await this.db
@@ -32,6 +35,7 @@ export class ModelReferenceRepository {
           sourceUrl: data.sourceUrl,
           rawJson: data.rawJson,
           fetchedAt: data.fetchedAt,
+          updatedAt: now,
         })
         .where(eq(modelReferenceEntries.id, existing.id));
       return (await this.findEntry(data.region, data.source, data.normalizedModelName))!;
@@ -39,9 +43,16 @@ export class ModelReferenceRepository {
     const row: ModelReferenceEntryInsert = {
       id: generateId('modelReference'),
       ...data,
+      createdAt: now,
+      updatedAt: now,
     };
     await this.db.insert(modelReferenceEntries).values(row);
     return row as ModelReferenceEntryRow;
+  }
+
+  async findEntryById(id: string): Promise<ModelReferenceEntryRow | undefined> {
+    const rows = await this.db.select().from(modelReferenceEntries).where(eq(modelReferenceEntries.id, id)).limit(1);
+    return rows[0];
   }
 
   async findEntry(
@@ -84,6 +95,41 @@ export class ModelReferenceRepository {
         and(eq(modelReferenceEntries.region, region), eq(modelReferenceEntries.source, source)),
       )
       .orderBy(desc(modelReferenceEntries.fetchedAt));
+  }
+
+  async listEntries(options?: {
+    region?: ModelReferenceRegion;
+    source?: ModelReferenceSource;
+    provider?: string;
+    sortBy?: 'score' | 'rank' | 'votes' | 'fetchedAt';
+    order?: 'asc' | 'desc';
+    limit?: number;
+  }): Promise<ModelReferenceEntryRow[]> {
+    const opts = options ?? {};
+    const conditions: ReturnType<typeof eq>[] = [];
+    if (opts.region) conditions.push(eq(modelReferenceEntries.region, opts.region));
+    if (opts.source) conditions.push(eq(modelReferenceEntries.source, opts.source));
+    if (opts.provider) conditions.push(eq(modelReferenceEntries.provider, opts.provider));
+
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const sortColumn =
+      opts.sortBy === 'score'
+        ? sql`json_extract(${modelReferenceEntries.scoresJson}, '$.arenaElo')`
+        : opts.sortBy === 'rank'
+          ? sql`json_extract(${modelReferenceEntries.scoresJson}, '$.rank')`
+          : opts.sortBy === 'votes'
+            ? sql`json_extract(${modelReferenceEntries.scoresJson}, '$.votes')`
+            : modelReferenceEntries.fetchedAt;
+
+    const orderFn = opts.order === 'asc' ? asc : desc;
+
+    return this.db
+      .select()
+      .from(modelReferenceEntries)
+      .where(where)
+      .orderBy(orderFn(sortColumn))
+      .limit(opts.limit ?? 200);
   }
 
   // --- Sync status ---

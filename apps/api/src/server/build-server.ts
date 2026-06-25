@@ -117,6 +117,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
     pricing: { db },
     plans: { db },
     debugContent: { db },
+    modelReference: { db },
     settings: { db },
   });
   await app.register(gatewayRoutes, { prefix: gatewayBasePath, db, secretKey: env.SECRET_KEY });

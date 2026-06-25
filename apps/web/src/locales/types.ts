@@ -16,6 +16,7 @@ export interface Messages {
       pricing: string;
       plans: string;
       debugContentLogs: string;
+      modelReference: string;
       settings: string;
       setup: string;
       login: string;
@@ -304,6 +305,40 @@ export interface Messages {
     detail: string;
     prompt: string;
     response: string;
+  };
+  modelReference: {
+    title: string;
+    refresh: string;
+    refreshed: string;
+    refreshFailed: string;
+    lastRefresh: string;
+    recommend: string;
+    recommendTitle: string;
+    upstreamKey: string;
+    createGroup: string;
+    groupName: string;
+    generateDraft: string;
+    apply: string;
+    applied: string;
+    applyFailed: string;
+    draftPublicModels: string;
+    draftModelGroup: string;
+    conflicts: string;
+    nameConflict: string;
+    selectEntries: string;
+    allProviders: string;
+    rank: string;
+    model: string;
+    provider: string;
+    score: string;
+    votes: string;
+    license: string;
+    sort: {
+      scoreDesc: string;
+      scoreAsc: string;
+      rankAsc: string;
+      votesDesc: string;
+    };
   };
   common: {
     save: string;

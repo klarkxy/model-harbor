@@ -19,7 +19,7 @@ describe('model reference repository', () => {
   it('upserts entry by normalized model name', async () => {
     await repo.upsertEntry({
       region: 'global',
-      source: 'rele',
+      source: 'arena',
       normalizedModelName: 'gpt-4o',
       sourceModelId: 'gpt-4o-2024-08-06',
       displayName: 'GPT-4o',
@@ -30,7 +30,7 @@ describe('model reference repository', () => {
     });
     await repo.upsertEntry({
       region: 'global',
-      source: 'rele',
+      source: 'arena',
       normalizedModelName: 'gpt-4o',
       sourceModelId: 'gpt-4o-2024-08-06',
       displayName: 'GPT-4o Updated',
@@ -47,11 +47,11 @@ describe('model reference repository', () => {
   it('upserts sync status', async () => {
     await repo.upsertSyncStatus({
       region: 'global',
-      source: 'rele',
+      source: 'arena',
       status: 'success',
       ttlMs: 86400000,
     });
-    const status = await repo.getSyncStatus('global', 'rele');
+    const status = await repo.getSyncStatus('global', 'arena');
     expect(status!.status).toBe('success');
   });
 });

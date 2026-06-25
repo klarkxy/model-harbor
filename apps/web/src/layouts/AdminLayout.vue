@@ -39,6 +39,7 @@ const menuOptions = computed<MenuOption[]>(() => [
   { key: 'pricing', label: t('layout.menu.pricing') },
   { key: 'plans', label: t('layout.menu.plans') },
   { key: 'debug-content-logs', label: t('layout.menu.debugContentLogs') },
+  { key: 'model-reference', label: t('layout.menu.modelReference') },
   { key: 'settings', label: t('layout.menu.settings') },
   { key: 'setup', label: t('layout.menu.setup') },
 ]);

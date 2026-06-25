@@ -86,6 +86,12 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'layout.menu.debugContentLogs' },
       },
       {
+        path: '/model-reference',
+        name: 'model-reference',
+        component: () => import('../pages/ModelReference.vue'),
+        meta: { titleKey: 'layout.menu.modelReference' },
+      },
+      {
         path: '/settings',
         name: 'settings',
         component: () => import('../pages/Settings.vue'),

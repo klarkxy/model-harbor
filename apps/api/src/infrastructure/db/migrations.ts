@@ -534,4 +534,11 @@ export const MIGRATIONS: readonly Migration[] = [
       `ALTER TABLE admin_settings ADD COLUMN content_log_max_rows INTEGER NOT NULL DEFAULT 1000`,
     ],
   },
+  {
+    version: 5,
+    statements: [
+      `ALTER TABLE model_reference_entries ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0`,
+      `ALTER TABLE model_reference_entries ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0`,
+    ],
+  },
 ];
