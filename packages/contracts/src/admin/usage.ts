@@ -30,6 +30,7 @@ export const usageRecordSchema = z.object({
   resolvedTargetType: z.enum(['public_model', 'model_group']),
   resolvedTargetId: z.string(),
   upstreamKeyId: z.string(),
+  requestTraceId: z.string().nullable(),
   realModelName: z.string(),
   sourceProtocol: z.string(),
   providerType: z.string(),

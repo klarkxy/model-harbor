@@ -113,6 +113,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
     backups: { db, client, dbFilePath, backupsDir },
     maintenance: { db },
     usage: { db },
+    traces: { db },
     settings: { db },
   });
   await app.register(gatewayRoutes, { prefix: gatewayBasePath, db, secretKey: env.SECRET_KEY });

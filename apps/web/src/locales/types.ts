@@ -12,6 +12,7 @@ export interface Messages {
       providerPresets: string;
       backups: string;
       usage: string;
+      traces: string;
       settings: string;
       setup: string;
       login: string;
@@ -176,6 +177,24 @@ export interface Messages {
     testModel: string;
     generateCurl: string;
     finish: string;
+  };
+  trace: {
+    title: string;
+    id: string;
+    target: string;
+    upstream: string;
+    model: string;
+    status: string;
+    latency: string;
+    tokens: string;
+    attempts: string;
+    detail: string;
+    steps: string;
+    time: string;
+    empty: string;
+    success: string;
+    error: string;
+    noSummary: string;
   };
   usage: {
     title: string;

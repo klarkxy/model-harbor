@@ -35,6 +35,7 @@ const menuOptions = computed<MenuOption[]>(() => [
   { key: 'apps', label: t('layout.menu.apps') },
   { key: 'backups', label: t('layout.menu.backups') },
   { key: 'usage', label: t('layout.menu.usage') },
+  { key: 'traces', label: t('layout.menu.traces') },
   { key: 'settings', label: t('layout.menu.settings') },
   { key: 'setup', label: t('layout.menu.setup') },
 ]);

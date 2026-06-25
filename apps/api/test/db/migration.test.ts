@@ -17,17 +17,18 @@ describe('database migrations', () => {
 
   it('migrates empty database to version 1', async () => {
     const version = await currentSchemaVersion(testDb.db);
-    expect(version).toBe(2);
+    expect(version).toBe(3);
     const rows = await testDb.db.select().from(schemaMigrations);
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(3);
     expect(rows[0]!.version).toBe(1);
     expect(rows[1]!.version).toBe(2);
+    expect(rows[2]!.version).toBe(3);
   });
 
   it('initSchema is idempotent', async () => {
     await initSchema(testDb.db);
     await initSchema(testDb.db);
     const rows = await testDb.db.select().from(schemaMigrations);
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(3);
   });
 });

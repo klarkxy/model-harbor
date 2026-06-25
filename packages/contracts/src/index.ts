@@ -10,5 +10,6 @@ export * from './admin/consumer-keys.js';
 export * from './admin/backups.js';
 export * from './admin/settings.js';
 export * from './admin/usage.js';
+export * from './admin/traces.js';
 export * from './gateway/models.js';
 export * from './gateway/chat.js';

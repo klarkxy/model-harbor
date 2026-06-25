@@ -520,4 +520,11 @@ export const MIGRATIONS: readonly Migration[] = [
       `ALTER TABLE admin_settings ADD COLUMN enable_circuit_breaker INTEGER DEFAULT 1`,
     ],
   },
+  {
+    version: 3,
+    statements: [
+      `ALTER TABLE usage_records ADD COLUMN request_trace_id TEXT`,
+      `CREATE INDEX IF NOT EXISTS usage_records_trace_idx ON usage_records(request_trace_id)`,
+    ],
+  },
 ];

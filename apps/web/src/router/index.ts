@@ -62,6 +62,12 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'layout.menu.usage' },
       },
       {
+        path: '/traces',
+        name: 'traces',
+        component: () => import('../pages/Traces.vue'),
+        meta: { titleKey: 'layout.menu.traces' },
+      },
+      {
         path: '/settings',
         name: 'settings',
         component: () => import('../pages/Settings.vue'),

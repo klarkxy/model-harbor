@@ -10,6 +10,7 @@ import { consumerKeyRoutes, type ConsumerKeyRouteDeps } from './consumer-keys.js
 import { backupRoutes, type BackupRouteDeps } from './backups.js';
 import { maintenanceRoutes, type MaintenanceRouteDeps } from './maintenance.js';
 import { usageRoutes, type UsageRouteDeps } from './usage.js';
+import { traceRoutes, type TraceRouteDeps } from './traces.js';
 import { settingsRoutes, type SettingsRouteDeps } from './settings.js';
 
 export interface AdminRoutesDeps {
@@ -24,6 +25,7 @@ export interface AdminRoutesDeps {
   backups: BackupRouteDeps;
   maintenance: MaintenanceRouteDeps;
   usage: UsageRouteDeps;
+  traces: TraceRouteDeps;
   settings: SettingsRouteDeps;
 }
 
@@ -63,6 +65,9 @@ export async function adminRoutes(app: FastifyInstance, deps: AdminRoutesDeps): 
   });
   await app.register(async (subApp) => subApp.register(usageRoutes, deps.usage), {
     prefix: '/usage',
+  });
+  await app.register(async (subApp) => subApp.register(traceRoutes, deps.traces), {
+    prefix: '/traces',
   });
   await app.register(async (subApp) => subApp.register(settingsRoutes, deps.settings), {
     prefix: '/settings',

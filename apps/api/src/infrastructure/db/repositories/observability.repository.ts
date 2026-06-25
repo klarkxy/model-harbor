@@ -1,4 +1,4 @@
-import { eq, desc, lt, and, gte, sql, count, sum } from 'drizzle-orm';
+import { eq, desc, lt, and, gte, sql, count, sum, isNotNull } from 'drizzle-orm';
 import { generateId } from '@manageyourllm/shared';
 import type { Db } from '../client.js';
 import {
@@ -41,6 +41,76 @@ export class ObservabilityRepository {
 
   async listRecentUsageRecords(limit = 100): Promise<UsageRecordRow[]> {
     return this.db.select().from(usageRecords).orderBy(desc(usageRecords.createdAt)).limit(limit);
+  }
+
+  async listTraces(
+    since: Date,
+    limit = 100,
+  ): Promise<
+    Array<{
+      requestTraceId: string;
+      appId: string;
+      consumerKeyId: string;
+      requestedTargetName: string;
+      upstreamKeyId: string;
+      realModelName: string;
+      status: string;
+      latencyMs: number;
+      inputTokens: number | null;
+      outputTokens: number | null;
+      totalTokens: number | null;
+      createdAt: Date;
+      failedCount: number;
+    }>
+  > {
+    const failedAttempts = this.db.$with('failed_attempts').as(
+      this.db
+        .select({
+          requestTraceId: requestTraceLogs.requestTraceId,
+          failedCount: count().as('failed_count'),
+        })
+        .from(requestTraceLogs)
+        .where(eq(requestTraceLogs.step, 'upstream_attempt_failed'))
+        .groupBy(requestTraceLogs.requestTraceId),
+    );
+
+    const rows = await this.db
+      .with(failedAttempts)
+      .select({
+        requestTraceId: usageRecords.requestTraceId,
+        appId: usageRecords.appId,
+        consumerKeyId: usageRecords.consumerKeyId,
+        requestedTargetName: usageRecords.requestedTargetName,
+        upstreamKeyId: usageRecords.upstreamKeyId,
+        realModelName: usageRecords.realModelName,
+        status: usageRecords.status,
+        latencyMs: usageRecords.latencyMs,
+        inputTokens: usageRecords.inputTokens,
+        outputTokens: usageRecords.outputTokens,
+        totalTokens: usageRecords.totalTokens,
+        createdAt: usageRecords.createdAt,
+        failedCount: sql<number>`coalesce(${failedAttempts.failedCount}, 0)`,
+      })
+      .from(usageRecords)
+      .leftJoin(failedAttempts, eq(usageRecords.requestTraceId, failedAttempts.requestTraceId))
+      .where(and(isNotNull(usageRecords.requestTraceId), gte(usageRecords.createdAt, since)))
+      .orderBy(desc(usageRecords.createdAt))
+      .limit(limit);
+
+    return rows.map((r) => ({
+      ...r,
+      requestTraceId: r.requestTraceId!,
+      failedCount: Number(r.failedCount ?? 0),
+    }));
+  }
+
+  async findTraceUsageRecord(requestTraceId: string): Promise<UsageRecordRow | undefined> {
+    const rows = await this.db
+      .select()
+      .from(usageRecords)
+      .where(eq(usageRecords.requestTraceId, requestTraceId))
+      .limit(1);
+    return rows[0];
   }
 
   async getUsageSummary(since: Date): Promise<{

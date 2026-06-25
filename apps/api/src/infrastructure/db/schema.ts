@@ -492,6 +492,7 @@ export const usageRecords = sqliteTable(
     requestedTargetName: text('requested_target_name').notNull(),
     resolvedTargetType: text('resolved_target_type', { enum: TARGET_TYPES }).notNull(),
     resolvedTargetId: text('resolved_target_id').notNull(),
+    requestTraceId: text('request_trace_id'),
     upstreamKeyId: text('upstream_key_id')
       .notNull()
       .references(() => upstreamKeys.id, { onDelete: 'cascade' }),
@@ -518,6 +519,7 @@ export const usageRecords = sqliteTable(
     index('usage_records_app_idx').on(t.appId, t.createdAt),
     index('usage_records_consumer_idx').on(t.consumerKeyId, t.createdAt),
     index('usage_records_upstream_idx').on(t.upstreamKeyId, t.createdAt),
+    index('usage_records_trace_idx').on(t.requestTraceId),
   ],
 );
 

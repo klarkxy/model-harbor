@@ -163,4 +163,93 @@ describe('observability repository', () => {
     const byTarget = await repo.getUsageGroupByTarget(since);
     expect(byTarget[0]!.name).toBe('gpt-5');
   });
+
+
+  it('lists traces with attempt counts', async () => {
+    const traceId = 'trace_success';
+    await repo.insertUsageRecord({
+      appId,
+      consumerKeyId,
+      requestedTargetName: 'gpt-5',
+      resolvedTargetType: 'public_model',
+      resolvedTargetId: 'pm_1',
+      requestTraceId: traceId,
+      upstreamKeyId,
+      realModelName: 'gpt-5-prod',
+      sourceProtocol: 'openai',
+      providerType: 'openai_compatible',
+      status: 'success',
+      latencyMs: 100,
+      inputTokens: 10,
+      outputTokens: 5,
+      totalTokens: 15,
+      stickyHit: false,
+    });
+    await repo.insertTraceLog({
+      requestTraceId: traceId,
+      step: 'upstream_attempt_failed',
+      stepIndex: 1000,
+      upstreamKeyId,
+      realModelName: 'gpt-5-prod',
+      status: 'fail',
+      errorCode: 'provider_rate_limit',
+    });
+
+    const since = new Date(Date.now() - 60_000);
+    const traces = await repo.listTraces(since, 100);
+    expect(traces).toHaveLength(1);
+    expect(traces[0]!.requestTraceId).toBe(traceId);
+    expect(traces[0]!.failedCount).toBe(1);
+    expect(traces[0]!.status).toBe('success');
+
+    const found = await repo.findTraceUsageRecord(traceId);
+    expect(found).toBeDefined();
+    expect(found!.requestTraceId).toBe(traceId);
+  });
+
+  it('counts failed attempts for error traces', async () => {
+    const traceId = 'trace_error';
+    await repo.insertUsageRecord({
+      appId,
+      consumerKeyId,
+      requestedTargetName: 'gpt-5',
+      resolvedTargetType: 'public_model',
+      resolvedTargetId: 'pm_1',
+      requestTraceId: traceId,
+      upstreamKeyId,
+      realModelName: 'gpt-5-prod',
+      sourceProtocol: 'openai',
+      providerType: 'openai_compatible',
+      status: 'provider_error',
+      latencyMs: 200,
+      inputTokens: 2,
+      outputTokens: 0,
+      totalTokens: 2,
+      stickyHit: false,
+    });
+    await repo.insertTraceLog({
+      requestTraceId: traceId,
+      step: 'upstream_attempt_failed',
+      stepIndex: 1000,
+      upstreamKeyId,
+      realModelName: 'gpt-5-prod',
+      status: 'fail',
+      errorCode: 'provider_error',
+    });
+    await repo.insertTraceLog({
+      requestTraceId: traceId,
+      step: 'upstream_attempt_failed',
+      stepIndex: 1001,
+      upstreamKeyId,
+      realModelName: 'gpt-5-prod',
+      status: 'fail',
+      errorCode: 'provider_error',
+    });
+
+    const since = new Date(Date.now() - 60_000);
+    const traces = await repo.listTraces(since, 100);
+    const trace = traces.find((t) => t.requestTraceId === traceId);
+    expect(trace).toBeDefined();
+    expect(trace!.failedCount).toBe(2);
+  });
 });

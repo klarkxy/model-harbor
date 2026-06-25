@@ -156,6 +156,7 @@ export class GatewaySideEffectsService {
       requestedTargetName: base.requestedTargetName,
       resolvedTargetType: base.resolvedTargetType,
       resolvedTargetId: base.resolvedTargetId,
+      requestTraceId: base.requestTraceId,
       upstreamKeyId: candidate.upstreamKey.id,
       realModelName: candidate.realModelName,
       sourceProtocol: info.sourceProtocol,
