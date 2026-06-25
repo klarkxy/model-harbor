@@ -1,4 +1,4 @@
-import { eq, desc, lt, and } from 'drizzle-orm';
+import { eq, desc, lt, and, gte, sql, count, sum } from 'drizzle-orm';
 import { generateId } from '@manageyourllm/shared';
 import type { Db } from '../client.js';
 import {
@@ -7,6 +7,9 @@ import {
   debugContentLogs,
   auditEvents,
   dailyConsumptionStats,
+  apps,
+  consumerKeys,
+  upstreamKeys,
   type UsageRecordInsert,
   type UsageRecordRow,
   type RequestTraceLogInsert,
@@ -38,6 +41,178 @@ export class ObservabilityRepository {
 
   async listRecentUsageRecords(limit = 100): Promise<UsageRecordRow[]> {
     return this.db.select().from(usageRecords).orderBy(desc(usageRecords.createdAt)).limit(limit);
+  }
+
+  async getUsageSummary(since: Date): Promise<{
+    requestCount: number;
+    successCount: number;
+    errorCount: number;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    stickyHitCount: number;
+  }> {
+    const [row] = await this.db
+      .select({
+        requestCount: count(),
+        successCount: sql<number>`sum(case when ${usageRecords.status} = 'success' then 1 else 0 end)`,
+        errorCount: sql<number>`sum(case when ${usageRecords.status} != 'success' then 1 else 0 end)`,
+        inputTokens: sum(usageRecords.inputTokens),
+        outputTokens: sum(usageRecords.outputTokens),
+        totalTokens: sum(usageRecords.totalTokens),
+        stickyHitCount: sql<number>`sum(case when ${usageRecords.stickyHit} = 1 then 1 else 0 end)`,
+      })
+      .from(usageRecords)
+      .where(gte(usageRecords.createdAt, since));
+    return {
+      requestCount: row?.requestCount ?? 0,
+      successCount: row?.successCount ?? 0,
+      errorCount: row?.errorCount ?? 0,
+      inputTokens: Number(row?.inputTokens ?? 0),
+      outputTokens: Number(row?.outputTokens ?? 0),
+      totalTokens: Number(row?.totalTokens ?? 0),
+      stickyHitCount: row?.stickyHitCount ?? 0,
+    };
+  }
+
+  async getUsageGroupByApp(
+    since: Date,
+  ): Promise<
+    Array<{
+      id: string;
+      name: string;
+      requestCount: number;
+      inputTokens: number;
+      outputTokens: number;
+      totalTokens: number;
+    }>
+  > {
+    const rows = await this.db
+      .select({
+        id: apps.id,
+        name: apps.name,
+        requestCount: count(),
+        inputTokens: sum(usageRecords.inputTokens),
+        outputTokens: sum(usageRecords.outputTokens),
+        totalTokens: sum(usageRecords.totalTokens),
+      })
+      .from(usageRecords)
+      .innerJoin(apps, eq(usageRecords.appId, apps.id))
+      .where(gte(usageRecords.createdAt, since))
+      .groupBy(apps.id, apps.name, usageRecords.appId)
+      .orderBy(desc(count()));
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      requestCount: r.requestCount,
+      inputTokens: Number(r.inputTokens ?? 0),
+      outputTokens: Number(r.outputTokens ?? 0),
+      totalTokens: Number(r.totalTokens ?? 0),
+    }));
+  }
+
+  async getUsageGroupByConsumerKey(
+    since: Date,
+  ): Promise<
+    Array<{
+      id: string;
+      name: string;
+      requestCount: number;
+      inputTokens: number;
+      outputTokens: number;
+      totalTokens: number;
+    }>
+  > {
+    const rows = await this.db
+      .select({
+        id: consumerKeys.id,
+        name: consumerKeys.name,
+        requestCount: count(),
+        inputTokens: sum(usageRecords.inputTokens),
+        outputTokens: sum(usageRecords.outputTokens),
+        totalTokens: sum(usageRecords.totalTokens),
+      })
+      .from(usageRecords)
+      .innerJoin(consumerKeys, eq(usageRecords.consumerKeyId, consumerKeys.id))
+      .where(gte(usageRecords.createdAt, since))
+      .groupBy(consumerKeys.id, consumerKeys.name, usageRecords.consumerKeyId)
+      .orderBy(desc(count()));
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      requestCount: r.requestCount,
+      inputTokens: Number(r.inputTokens ?? 0),
+      outputTokens: Number(r.outputTokens ?? 0),
+      totalTokens: Number(r.totalTokens ?? 0),
+    }));
+  }
+
+  async getUsageGroupByUpstream(
+    since: Date,
+  ): Promise<
+    Array<{
+      id: string;
+      name: string;
+      requestCount: number;
+      inputTokens: number;
+      outputTokens: number;
+      totalTokens: number;
+    }>
+  > {
+    const rows = await this.db
+      .select({
+        id: upstreamKeys.id,
+        name: upstreamKeys.name,
+        requestCount: count(),
+        inputTokens: sum(usageRecords.inputTokens),
+        outputTokens: sum(usageRecords.outputTokens),
+        totalTokens: sum(usageRecords.totalTokens),
+      })
+      .from(usageRecords)
+      .innerJoin(upstreamKeys, eq(usageRecords.upstreamKeyId, upstreamKeys.id))
+      .where(gte(usageRecords.createdAt, since))
+      .groupBy(upstreamKeys.id, upstreamKeys.name, usageRecords.upstreamKeyId)
+      .orderBy(desc(count()));
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      requestCount: r.requestCount,
+      inputTokens: Number(r.inputTokens ?? 0),
+      outputTokens: Number(r.outputTokens ?? 0),
+      totalTokens: Number(r.totalTokens ?? 0),
+    }));
+  }
+
+  async getUsageGroupByTarget(
+    since: Date,
+  ): Promise<
+    Array<{
+      name: string;
+      requestCount: number;
+      inputTokens: number;
+      outputTokens: number;
+      totalTokens: number;
+    }>
+  > {
+    const rows = await this.db
+      .select({
+        name: usageRecords.requestedTargetName,
+        requestCount: count(),
+        inputTokens: sum(usageRecords.inputTokens),
+        outputTokens: sum(usageRecords.outputTokens),
+        totalTokens: sum(usageRecords.totalTokens),
+      })
+      .from(usageRecords)
+      .where(gte(usageRecords.createdAt, since))
+      .groupBy(usageRecords.requestedTargetName)
+      .orderBy(desc(count()));
+    return rows.map((r) => ({
+      name: r.name,
+      requestCount: r.requestCount,
+      inputTokens: Number(r.inputTokens ?? 0),
+      outputTokens: Number(r.outputTokens ?? 0),
+      totalTokens: Number(r.totalTokens ?? 0),
+    }));
   }
 
   // --- Trace logs ---

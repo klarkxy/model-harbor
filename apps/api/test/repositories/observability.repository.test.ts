@@ -110,4 +110,57 @@ describe('observability repository', () => {
     expect(stat!.requestCount).toBe(3);
     expect(stat!.totalCostAmount).toBe(7);
   });
+
+  it('aggregates usage records for dashboard', async () => {
+    const since = new Date(Date.now() - 60_000);
+    await repo.insertUsageRecord({
+      appId,
+      consumerKeyId,
+      requestedTargetName: 'gpt-5',
+      resolvedTargetType: 'public_model',
+      resolvedTargetId: 'pm_1',
+      upstreamKeyId,
+      realModelName: 'gpt-5-prod',
+      sourceProtocol: 'openai',
+      providerType: 'openai_compatible',
+      status: 'success',
+      latencyMs: 100,
+      inputTokens: 10,
+      outputTokens: 5,
+      totalTokens: 15,
+      stickyHit: true,
+    });
+    await repo.insertUsageRecord({
+      appId,
+      consumerKeyId,
+      requestedTargetName: 'gpt-5',
+      resolvedTargetType: 'public_model',
+      resolvedTargetId: 'pm_1',
+      upstreamKeyId,
+      realModelName: 'gpt-5-prod',
+      sourceProtocol: 'openai',
+      providerType: 'openai_compatible',
+      status: 'provider_error',
+      latencyMs: 200,
+      inputTokens: 2,
+      outputTokens: 0,
+      totalTokens: 2,
+      stickyHit: false,
+    });
+
+    const summary = await repo.getUsageSummary(since);
+    expect(summary.requestCount).toBe(2);
+    expect(summary.successCount).toBe(1);
+    expect(summary.errorCount).toBe(1);
+    expect(summary.inputTokens).toBe(12);
+    expect(summary.totalTokens).toBe(17);
+    expect(summary.stickyHitCount).toBe(1);
+
+    const byUpstream = await repo.getUsageGroupByUpstream(since);
+    expect(byUpstream).toHaveLength(1);
+    expect(byUpstream[0]!.requestCount).toBe(2);
+
+    const byTarget = await repo.getUsageGroupByTarget(since);
+    expect(byTarget[0]!.name).toBe('gpt-5');
+  });
 });

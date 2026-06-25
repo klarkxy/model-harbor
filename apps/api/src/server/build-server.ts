@@ -112,6 +112,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
     consumerKeys: { db },
     backups: { db, client, dbFilePath, backupsDir },
     maintenance: { db },
+    usage: { db },
     settings: { db },
   });
   await app.register(gatewayRoutes, { prefix: gatewayBasePath, db, secretKey: env.SECRET_KEY });

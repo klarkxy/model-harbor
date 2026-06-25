@@ -179,6 +179,31 @@ export interface Messages {
   };
   usage: {
     title: string;
+    today: string;
+    last7Days: string;
+    last30Days: string;
+    requestCount: string;
+    successRate: string;
+    inputTokens: string;
+    outputTokens: string;
+    totalTokens: string;
+    stickyHitRate: string;
+    byApp: string;
+    byConsumerKey: string;
+    byUpstream: string;
+    byTarget: string;
+    recentRequests: string;
+    name: string;
+    tokens: string;
+    time: string;
+    target: string;
+    upstream: string;
+    model: string;
+    status: string;
+    success: string;
+    error: string;
+    latency: string;
+    empty: string;
   };
   settings: {
     title: string;
@@ -196,6 +221,7 @@ export interface Messages {
     delete: string;
     deleted: string;
     deleteFailed: string;
+    loadFailed: string;
     cancel: string;
     close: string;
     edit: string;
