@@ -4,6 +4,7 @@ export interface StreamTransformerOptions {
   requestedModel: string;
   sourceProtocol: 'openai' | 'anthropic' | 'codex';
   onUsage?: (usage: ChatUsageIR | null) => void;
+  onComplete?: (payload: { content: string; usage: ChatUsageIR | null }) => void;
 }
 
 const encoder = new TextEncoder();
@@ -11,24 +12,40 @@ const encoder = new TextEncoder();
 export function createStreamTransformer(
   options: StreamTransformerOptions,
 ): TransformStream<Uint8Array, Uint8Array> {
-  const { requestedModel, sourceProtocol, onUsage } = options;
+  const { requestedModel, sourceProtocol, onUsage, onComplete } = options;
   let buffer = '';
   let inputTokens = 0;
   let outputTokens = 0;
   let usageReported = false;
+  let completedReported = false;
+  let assistantContent = '';
 
   function reportUsage(override?: ChatUsageIR | null) {
     if (usageReported) return;
     usageReported = true;
-    if (override === null || (inputTokens === 0 && outputTokens === 0)) {
-      onUsage?.(override ?? null);
-      return;
-    }
-    onUsage?.({
-      inputTokens,
-      outputTokens,
-      totalTokens: inputTokens + outputTokens,
-    });
+    const usage =
+      override === null || (inputTokens === 0 && outputTokens === 0)
+        ? override ?? null
+        : {
+            inputTokens,
+            outputTokens,
+            totalTokens: inputTokens + outputTokens,
+          };
+    onUsage?.(usage);
+  }
+
+  function reportComplete(override?: ChatUsageIR | null) {
+    if (completedReported) return;
+    completedReported = true;
+    const usage =
+      override === null || (inputTokens === 0 && outputTokens === 0)
+        ? override ?? null
+        : {
+            inputTokens,
+            outputTokens,
+            totalTokens: inputTokens + outputTokens,
+          };
+    onComplete?.({ content: assistantContent, usage });
   }
 
   function applyOpenAIUsage(usage: unknown) {
@@ -80,6 +97,12 @@ export function createStreamTransformer(
     rewriteModelInObject(obj);
     applyOpenAIUsage(obj.usage);
 
+    const choice = (obj.choices as Array<Record<string, unknown>> | undefined)?.[0];
+    const delta = choice?.delta as Record<string, unknown> | undefined;
+    if (typeof delta?.content === 'string') {
+      assistantContent += delta.content;
+    }
+
     controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
   }
 
@@ -114,6 +137,16 @@ export function createStreamTransformer(
     if (obj.usage && typeof obj.usage === 'object') {
       const u = obj.usage as Record<string, unknown>;
       if (typeof u.output_tokens === 'number') outputTokens = u.output_tokens;
+    }
+
+    if (obj.content_block && typeof obj.content_block === 'object') {
+      const block = obj.content_block as Record<string, unknown>;
+      if (typeof block.text === 'string') assistantContent += block.text;
+    }
+
+    if (obj.delta && typeof obj.delta === 'object') {
+      const delta = obj.delta as Record<string, unknown>;
+      if (typeof delta.text === 'string') assistantContent += delta.text;
     }
 
     controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
@@ -152,6 +185,7 @@ export function createStreamTransformer(
         processEvent(buffer, controller);
       }
       reportUsage();
+      reportComplete();
       controller.terminate();
     },
   });

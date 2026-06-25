@@ -13,6 +13,7 @@ import { usageRoutes, type UsageRouteDeps } from './usage.js';
 import { traceRoutes, type TraceRouteDeps } from './traces.js';
 import { pricingRoutes, type PricingRouteDeps } from './pricing.js';
 import { planRoutes, type PlanRouteDeps } from './plans.js';
+import { debugContentRoutes, type DebugContentRouteDeps } from './debug-content.js';
 import { settingsRoutes, type SettingsRouteDeps } from './settings.js';
 
 export interface AdminRoutesDeps {
@@ -30,6 +31,7 @@ export interface AdminRoutesDeps {
   traces: TraceRouteDeps;
   pricing: PricingRouteDeps;
   plans: PlanRouteDeps;
+  debugContent: DebugContentRouteDeps;
   settings: SettingsRouteDeps;
 }
 
@@ -78,6 +80,9 @@ export async function adminRoutes(app: FastifyInstance, deps: AdminRoutesDeps): 
   });
   await app.register(async (subApp) => subApp.register(planRoutes, deps.plans), {
     prefix: '/plans',
+  });
+  await app.register(async (subApp) => subApp.register(debugContentRoutes, deps.debugContent), {
+    prefix: '/debug-content',
   });
   await app.register(async (subApp) => subApp.register(settingsRoutes, deps.settings), {
     prefix: '/settings',

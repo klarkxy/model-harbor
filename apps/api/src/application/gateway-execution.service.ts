@@ -371,6 +371,14 @@ export class GatewayExecutionService {
           settings,
         );
 
+        await sideEffects.recordDebugContent(
+          base,
+          settings,
+          ir.messages,
+          upstreamResponse.body,
+          normalized.usage,
+        );
+
         return { ok: true, normalized };
       }
 
@@ -485,6 +493,17 @@ export class GatewayExecutionService {
                 usage,
               },
               settings,
+            )
+            .catch(() => {});
+        },
+        onComplete: ({ content, usage }) => {
+          sideEffects
+            .recordDebugContent(
+              base,
+              settings,
+              ir.messages,
+              { content },
+              usage,
             )
             .catch(() => {});
         },

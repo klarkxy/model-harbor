@@ -65,22 +65,22 @@
 
 ## Temporary Debug Content Logs
 
-- [ ] P5-030 Implement debug content settings API
+- [x] P5-030 Implement debug content settings API
   - Depends on: P1-036, P4-062
   - Deliverables: enable for duration/max rows, disable, status
   - Acceptance: enabling stores expiry and max row settings.
 
-- [ ] P5-031 Implement redaction and truncation
+- [x] P5-031 Implement redaction and truncation
   - Depends on: P5-030
   - Deliverables: redact mh_, sk-, Bearer, auth headers; max bytes truncation
   - Acceptance: tests verify secrets do not persist.
 
-- [ ] P5-032 Implement debug content write path
+- [x] P5-032 Implement debug content write path
   - Depends on: P5-031, P3-070, P4-020
   - Deliverables: non-stream and stream summary writes when enabled
   - Acceptance: disabled mode writes nothing; expired mode writes nothing.
 
-- [ ] P5-033 Implement debug content UI
+- [x] P5-033 Implement debug content UI
   - Depends on: P5-030, P5-032
   - Deliverables: banner, enable/disable controls, recent debug rows
   - Acceptance: UI clearly indicates active recording.

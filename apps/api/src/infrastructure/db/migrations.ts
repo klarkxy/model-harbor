@@ -527,4 +527,11 @@ export const MIGRATIONS: readonly Migration[] = [
       `CREATE INDEX IF NOT EXISTS usage_records_trace_idx ON usage_records(request_trace_id)`,
     ],
   },
+  {
+    version: 4,
+    statements: [
+      `ALTER TABLE admin_settings ADD COLUMN content_log_expires_at INTEGER`,
+      `ALTER TABLE admin_settings ADD COLUMN content_log_max_rows INTEGER NOT NULL DEFAULT 1000`,
+    ],
+  },
 ];

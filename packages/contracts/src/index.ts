@@ -13,5 +13,6 @@ export * from './admin/usage.js';
 export * from './admin/traces.js';
 export * from './admin/pricing.js';
 export * from './admin/plans.js';
+export * from './admin/debug-content.js';
 export * from './gateway/models.js';
 export * from './gateway/chat.js';

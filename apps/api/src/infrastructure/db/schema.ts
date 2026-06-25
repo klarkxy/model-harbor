@@ -111,6 +111,8 @@ export const adminSettings = sqliteTable('admin_settings', {
     .default(5_000),
   firstTokenTimeoutMs: integer('first_token_timeout_ms').notNull().default(15_000),
   contentLogEnabled: integer('content_log_enabled', { mode: 'boolean' }).notNull().default(false),
+  contentLogExpiresAt: integer('content_log_expires_at', { mode: 'timestamp_ms' }),
+  contentLogMaxRows: integer('content_log_max_rows').notNull().default(1000),
   contentLogRetentionDays: integer('content_log_retention_days').notNull().default(7),
   contentLogMaxPayloadBytes: integer('content_log_max_payload_bytes').notNull().default(100_000),
   publicEndpointsBasePath: text('public_endpoints_base_path').notNull().default('/v1'),

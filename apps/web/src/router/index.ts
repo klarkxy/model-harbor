@@ -80,6 +80,12 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'layout.menu.plans' },
       },
       {
+        path: '/debug-content-logs',
+        name: 'debug-content-logs',
+        component: () => import('../pages/DebugContentLogs.vue'),
+        meta: { titleKey: 'layout.menu.debugContentLogs' },
+      },
+      {
         path: '/settings',
         name: 'settings',
         component: () => import('../pages/Settings.vue'),

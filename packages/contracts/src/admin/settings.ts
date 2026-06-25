@@ -14,6 +14,8 @@ export const settingsSchema = z.object({
   endpointHealthProbeDegradedLatencyMs: z.number(),
   firstTokenTimeoutMs: z.number(),
   contentLogEnabled: z.boolean(),
+  contentLogExpiresAt: z.string().datetime().nullable().optional(),
+  contentLogMaxRows: z.number(),
   contentLogRetentionDays: z.number(),
   contentLogMaxPayloadBytes: z.number(),
   publicEndpointsBasePath: z.string(),
@@ -38,6 +40,11 @@ export const updateSettingsRequestSchema = z.object({
   defaultRetries: z.number().int().min(0).max(5).optional(),
   enableStickySession: z.boolean().optional(),
   enableCircuitBreaker: z.boolean().optional(),
+  contentLogEnabled: z.boolean().optional(),
+  contentLogExpiresAt: z.string().datetime().nullable().optional(),
+  contentLogMaxRows: z.number().int().min(1).optional(),
+  contentLogRetentionDays: z.number().int().min(1).optional(),
+  contentLogMaxPayloadBytes: z.number().int().min(100).optional(),
 });
 
 export const settingsResponseSchema = successEnvelope(settingsSchema);

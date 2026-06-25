@@ -4,12 +4,15 @@ import type { Db } from '../infrastructure/db/client.js';
 import { RoutingStateRepository } from '../infrastructure/db/repositories/routing-state.repository.js';
 import { UpstreamKeyRepository } from '../infrastructure/db/repositories/upstream-key.repository.js';
 import { CostLedgerService } from '../domain/cost-ledger/cost-ledger.service.js';
+import { redactAndTruncate } from '../domain/observability/content-log-redaction.js';
+import { ObservabilityRepository } from '../infrastructure/db/repositories/observability.repository.js';
 import {
   dailyConsumptionStats,
+  debugContentLogs,
   requestTraceLogs,
   usageRecords,
 } from '../infrastructure/db/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, count, asc, inArray } from 'drizzle-orm';
 import type { NormalizedError, ChatUsageIR } from '@manageyourllm/shared';
 import type { RoutingCandidate } from '../domain/gateway/routing.types.js';
 import type { AdminSettingsRow, QuotaPeriod } from '../infrastructure/db/schema.js';
@@ -104,6 +107,54 @@ export class GatewaySideEffectsService {
     this.routingStateRepo = new RoutingStateRepository(db);
     this.upstreamKeyRepo = new UpstreamKeyRepository(db);
     this.costLedgerService = new CostLedgerService(db);
+  }
+
+  async recordDebugContent(
+    base: ExecutionBaseInfo,
+    settings: AdminSettingsRow,
+    prompt: unknown,
+    response: unknown,
+    usage: ChatUsageIR | null,
+  ): Promise<void> {
+    if (!settings.contentLogEnabled) return;
+    const now = new Date();
+    if (settings.contentLogExpiresAt && settings.contentLogExpiresAt <= now) return;
+
+    const maxPayloadBytes = settings.contentLogMaxPayloadBytes;
+    const maxRows = settings.contentLogMaxRows;
+
+    const safePrompt = redactAndTruncate(prompt, maxPayloadBytes);
+    const safeResponse = redactAndTruncate(response, maxPayloadBytes);
+
+    if (maxRows > 0) {
+      const [current] = await this.db
+        .select({ total: count() })
+        .from(debugContentLogs);
+      const total = current?.total ?? 0;
+      if (total >= maxRows) {
+        const excess = total - maxRows + 1;
+        const oldest = await this.db
+          .select({ id: debugContentLogs.id })
+          .from(debugContentLogs)
+          .orderBy(asc(debugContentLogs.createdAt))
+          .limit(excess);
+        if (oldest.length > 0) {
+          await this.db
+            .delete(debugContentLogs)
+            .where(inArray(debugContentLogs.id, oldest.map((r) => r.id)));
+        }
+      }
+    }
+
+    const repo = new ObservabilityRepository(this.db);
+    await repo.insertDebugContentLog({
+      requestTraceId: base.requestTraceId,
+      promptJson: safePrompt,
+      responseJson: safeResponse,
+      inputTokens: usage?.inputTokens ?? null,
+      outputTokens: usage?.outputTokens ?? null,
+      totalTokens: usage?.totalTokens ?? null,
+    });
   }
 
   async recordTraceEvent(base: ExecutionBaseInfo, event: TraceEventInfo): Promise<void> {

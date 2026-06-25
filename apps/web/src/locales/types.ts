@@ -15,6 +15,7 @@ export interface Messages {
       traces: string;
       pricing: string;
       plans: string;
+      debugContentLogs: string;
       settings: string;
       setup: string;
       login: string;
@@ -281,6 +282,29 @@ export interface Messages {
     enableStickySession: string;
     enableCircuitBreaker: string;
   };
+  debugContentLogs: {
+    title: string;
+    controls: string;
+    recent: string;
+    recordingTitle: string;
+    notRecordingTitle: string;
+    notRecordingDesc: string;
+    remaining: string;
+    duration: {
+      label: string;
+      off: string;
+      min15: string;
+      hour1: string;
+      hour4: string;
+    };
+    maxRows: string;
+    time: string;
+    traceId: string;
+    tokens: string;
+    detail: string;
+    prompt: string;
+    response: string;
+  };
   common: {
     save: string;
     saved: string;
@@ -294,6 +318,7 @@ export interface Messages {
     edit: string;
     create: string;
     actions: string;
+    view: string;
     yes: string;
     no: string;
     next: string;

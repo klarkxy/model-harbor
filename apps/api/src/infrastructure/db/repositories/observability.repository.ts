@@ -329,6 +329,25 @@ export class ObservabilityRepository {
     return row as DebugContentLogRow;
   }
 
+  async listRecentDebugContentLogs(limit = 100): Promise<DebugContentLogRow[]> {
+    return this.db
+      .select()
+      .from(debugContentLogs)
+      .orderBy(desc(debugContentLogs.createdAt))
+      .limit(limit);
+  }
+
+  async findDebugContentLogByTraceId(
+    requestTraceId: string,
+  ): Promise<DebugContentLogRow | undefined> {
+    const rows = await this.db
+      .select()
+      .from(debugContentLogs)
+      .where(eq(debugContentLogs.requestTraceId, requestTraceId))
+      .limit(1);
+    return rows[0];
+  }
+
   async deleteOldDebugContentLogs(before: Date): Promise<void> {
     await this.db.delete(debugContentLogs).where(lt(debugContentLogs.createdAt, before));
   }

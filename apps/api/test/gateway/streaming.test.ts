@@ -111,3 +111,53 @@ describe('createStreamTransformer', () => {
     expect(onUsage).toHaveBeenCalledWith(null);
   });
 });
+
+
+describe('createStreamTransformer content collection', () => {
+  it('collects OpenAI assistant content', async () => {
+    const onComplete = vi.fn<(payload: { content: string; usage: ChatUsageIR | null }) => void>();
+    const source = makeSource([
+      'data: {"id":"c1","object":"chat.completion.chunk","model":"real-model","choices":[{"delta":{"content":"Hello "}}]}\n\n',
+      'data: {"id":"c1","object":"chat.completion.chunk","model":"real-model","choices":[{"delta":{"content":"world"}}]}\n\n',
+      'data: {"id":"c1","object":"chat.completion.chunk","model":"real-model","choices":[],"usage":{"prompt_tokens":2,"completion_tokens":2,"total_tokens":4}}\n\n',
+      'data: [DONE]\n\n',
+    ]);
+
+    const transformed = source.pipeThrough(
+      createStreamTransformer({
+        requestedModel: 'gpt-4o',
+        sourceProtocol: 'openai',
+        onComplete,
+      }),
+    );
+
+    await collectStream(transformed);
+    expect(onComplete).toHaveBeenCalledWith({
+      content: 'Hello world',
+      usage: { inputTokens: 2, outputTokens: 2, totalTokens: 4 },
+    });
+  });
+
+  it('collects Anthropic assistant content', async () => {
+    const onComplete = vi.fn<(payload: { content: string; usage: ChatUsageIR | null }) => void>();
+    const source = makeSource([
+      'data: {"type":"content_block_start","content_block":{"type":"text","text":"Hi "}}\n\n',
+      'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"there"}}\n\n',
+      'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":2}}\n\n',
+    ]);
+
+    const transformed = source.pipeThrough(
+      createStreamTransformer({
+        requestedModel: 'claude-public',
+        sourceProtocol: 'anthropic',
+        onComplete,
+      }),
+    );
+
+    await collectStream(transformed);
+    expect(onComplete).toHaveBeenCalledWith({
+      content: 'Hi there',
+      usage: { inputTokens: 0, outputTokens: 2, totalTokens: 2 },
+    });
+  });
+});

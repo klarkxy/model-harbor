@@ -25,6 +25,16 @@ export async function settingsRoutes(app: FastifyInstance, deps: SettingsRouteDe
       defaultRetries: body.defaultRetries,
       enableStickySession: body.enableStickySession,
       enableCircuitBreaker: body.enableCircuitBreaker,
+      contentLogEnabled: body.contentLogEnabled,
+      contentLogExpiresAt:
+        body.contentLogExpiresAt === undefined
+          ? undefined
+          : body.contentLogExpiresAt === null
+            ? null
+            : new Date(body.contentLogExpiresAt),
+      contentLogMaxRows: body.contentLogMaxRows,
+      contentLogRetentionDays: body.contentLogRetentionDays,
+      contentLogMaxPayloadBytes: body.contentLogMaxPayloadBytes,
     });
     return settingsResponseSchema.parse({ data: serializeForContract(settings) });
   });
