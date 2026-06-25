@@ -9,6 +9,7 @@ export interface Messages {
       publicModels: string;
       modelGroups: string;
       apps: string;
+      providerPresets: string;
       backups: string;
       usage: string;
       settings: string;
@@ -114,6 +115,19 @@ export interface Messages {
     revoke: string;
     confirmDelete: string;
   };
+  providerPresets: {
+    title: string;
+    create: string;
+    edit: string;
+    name: string;
+    providerType: string;
+    descriptorJson: string;
+    source: string;
+    builtin: string;
+    local: string;
+    confirmDelete: string;
+    invalidDescriptor: string;
+  };
   backups: {
     title: string;
     create: string;
@@ -128,6 +142,10 @@ export interface Messages {
     restored: string;
     confirm: string;
     confirmRequired: string;
+    delete: string;
+    deleted: string;
+    exportConfig: string;
+    exported: string;
   };
   setup: {
     title: string;

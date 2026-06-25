@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, statSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, statSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { BackupRepository } from '../../infrastructure/db/repositories/backup.repository.js';
 import { UpstreamKeyRepository } from '../../infrastructure/db/repositories/upstream-key.repository.js';
@@ -57,6 +57,17 @@ export class BackupService {
     if (!existsSync(backupPath)) return false;
     // 真实恢复需要先关闭数据库连接再替换文件；这里作为占位实现，仅验证确认标志。
     // Phase 后续补充完整恢复流程。
+    return true;
+  }
+
+  async deleteBackup(id: string): Promise<boolean> {
+    const backup = await this.repo().findById(id);
+    if (!backup) return false;
+    const backupPath = join(this.deps.backupsDir, backup.filename);
+    if (existsSync(backupPath)) {
+      unlinkSync(backupPath);
+    }
+    await this.repo().deleteBackup(id);
     return true;
   }
 

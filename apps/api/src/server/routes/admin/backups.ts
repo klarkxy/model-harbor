@@ -38,6 +38,12 @@ export async function backupRoutes(app: FastifyInstance, deps: BackupRouteDeps):
     return successEnvelope(z.object({ ok: z.boolean() })).parse({ data: { ok } });
   });
 
+  app.delete('/:id', async (req) => {
+    const { id } = req.params as { id: string };
+    const ok = await service.deleteBackup(id);
+    return successEnvelope(z.object({ ok: z.boolean() })).parse({ data: { ok } });
+  });
+
   app.get('/export-config', async () => {
     const config = await service.exportNonSensitiveConfig();
     return successEnvelope(z.record(z.unknown())).parse({ data: config });

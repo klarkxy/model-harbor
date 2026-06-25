@@ -26,6 +26,12 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'layout.menu.upstreamKeys' },
       },
       {
+        path: '/provider-presets',
+        name: 'provider-presets',
+        component: () => import('../pages/ProviderPresets.vue'),
+        meta: { titleKey: 'layout.menu.providerPresets' },
+      },
+      {
         path: '/public-models',
         name: 'public-models',
         component: () => import('../pages/PublicModels.vue'),

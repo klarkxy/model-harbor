@@ -29,6 +29,7 @@ const collapsed = ref(false);
 const menuOptions = computed<MenuOption[]>(() => [
   { key: 'overview', label: t('layout.menu.overview') },
   { key: 'upstream-keys', label: t('layout.menu.upstreamKeys') },
+  { key: 'provider-presets', label: t('layout.menu.providerPresets') },
   { key: 'public-models', label: t('layout.menu.publicModels') },
   { key: 'model-groups', label: t('layout.menu.modelGroups') },
   { key: 'apps', label: t('layout.menu.apps') },

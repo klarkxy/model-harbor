@@ -15,7 +15,13 @@ import {
   NSwitch,
 } from 'naive-ui';
 import { useI18n } from 'vue-i18n';
-import { listBackups, createBackup, restoreBackup } from '../api/admin/backups.js';
+import {
+  listBackups,
+  createBackup,
+  restoreBackup,
+  deleteBackup,
+  exportConfig,
+} from '../api/admin/backups.js';
 import type { BackupContract } from '@manageyourllm/contracts';
 import type { DataTableColumns } from 'naive-ui';
 
@@ -71,6 +77,32 @@ function openRestore(row: BackupContract) {
   restoreForm.value = { show: true, id: row.id, confirm: false };
 }
 
+async function onDelete(row: BackupContract) {
+  try {
+    await deleteBackup(row.id);
+    await load();
+    message.success(t('common.deleted'));
+  } catch (err) {
+    message.error(err instanceof Error ? err.message : t('common.deleteFailed'));
+  }
+}
+
+async function onExport() {
+  try {
+    const config = await exportConfig();
+    const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `manageyourllm-config-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    message.success(t('backups.exported'));
+  } catch (err) {
+    message.error(err instanceof Error ? err.message : t('common.saveFailed'));
+  }
+}
+
 const columns: DataTableColumns<BackupContract> = [
   { title: t('backups.filename'), key: 'filename' },
   { title: t('backups.type'), key: 'type' },
@@ -91,6 +123,19 @@ const columns: DataTableColumns<BackupContract> = [
               { size: 'small', onClick: () => openRestore(row) },
               { default: () => t('backups.restore') },
             ),
+            h(
+              NPopconfirm,
+              { onPositiveClick: () => onDelete(row) },
+              {
+                trigger: () =>
+                  h(
+                    NButton,
+                    { size: 'small', type: 'error' },
+                    { default: () => t('backups.delete') },
+                  ),
+                default: () => t('backups.confirmRequired'),
+              },
+            ),
           ],
         },
       );
@@ -105,6 +150,7 @@ onMounted(load);
   <NCard :title="t('backups.title')">
     <NSpace vertical :size="16">
       <NSpace justify="end">
+        <NButton @click="onExport">{{ t('backups.exportConfig') }}</NButton>
         <NButton type="primary" @click="showCreate = true">{{ t('backups.create') }}</NButton>
       </NSpace>
       <NDataTable

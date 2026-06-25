@@ -22,3 +22,13 @@ export async function restoreBackup(
   const res = await api.post<{ data: { ok: boolean } }>(`/api/admin/backups/${id}/restore`, body);
   return res.data;
 }
+
+export async function deleteBackup(id: string): Promise<{ ok: boolean }> {
+  const res = await api.delete<{ data: { ok: boolean } }>(`/api/admin/backups/${id}`);
+  return res.data;
+}
+
+export async function exportConfig(): Promise<Record<string, unknown>> {
+  const res = await api.get<{ data: Record<string, unknown> }>('/api/admin/backups/export-config');
+  return res.data;
+}
