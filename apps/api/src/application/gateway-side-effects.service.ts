@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { Db } from '../infrastructure/db/client.js';
 import { RoutingStateRepository } from '../infrastructure/db/repositories/routing-state.repository.js';
 import { UpstreamKeyRepository } from '../infrastructure/db/repositories/upstream-key.repository.js';
+import { CostLedgerService } from '../domain/cost-ledger/cost-ledger.service.js';
 import {
   dailyConsumptionStats,
   requestTraceLogs,
@@ -97,10 +98,12 @@ function isRetriableFailure(err: NormalizedError | undefined): err is Normalized
 export class GatewaySideEffectsService {
   private readonly routingStateRepo: RoutingStateRepository;
   private readonly upstreamKeyRepo: UpstreamKeyRepository;
+  private readonly costLedgerService: CostLedgerService;
 
   constructor(private readonly db: Db) {
     this.routingStateRepo = new RoutingStateRepository(db);
     this.upstreamKeyRepo = new UpstreamKeyRepository(db);
+    this.costLedgerService = new CostLedgerService(db);
   }
 
   async recordTraceEvent(base: ExecutionBaseInfo, event: TraceEventInfo): Promise<void> {
@@ -148,7 +151,13 @@ export class GatewaySideEffectsService {
     const usage = info.usage;
     const status = info.success ? 'success' : (info.error?.code ?? 'provider_error');
     const errorCode = info.success ? null : (info.error?.code ?? null);
-
+    const { costAmount, costCurrency } = await this.costLedgerService.computeCost(
+      candidate.providerType,
+      candidate.upstreamKey.id,
+      candidate.realModelName,
+      usage,
+      now,
+    );
     await this.db.insert(usageRecords).values({
       id: generateId('usageRecord'),
       appId: base.appId,
@@ -172,13 +181,21 @@ export class GatewaySideEffectsService {
       status,
       errorCode,
       latencyMs: info.latencyMs,
-      costAmount: 0,
-      costCurrency: 'USD',
+      costAmount,
+      costCurrency,
       createdAt: now,
     });
 
     await this.incrementCounters(candidate.upstreamKey.id, usage, now);
-    await this.upsertDailyStats(candidate, info.success, usage, info.latencyMs, now);
+    await this.upsertDailyStats(
+      candidate,
+      info.success,
+      usage,
+      info.latencyMs,
+      costAmount,
+      costCurrency,
+      now,
+    );
 
     if (info.success) {
       await this.ensureStickyBinding(base, candidate, info, now);
@@ -216,6 +233,8 @@ export class GatewaySideEffectsService {
     success: boolean,
     usage: ChatUsageIR | null,
     latencyMs: number,
+    costAmount: number,
+    costCurrency: string,
     now: Date,
   ): Promise<void> {
     const day = dayDateString(now);
@@ -253,6 +272,8 @@ export class GatewaySideEffectsService {
           cacheReadTokens: row.cacheReadTokens + cacheReadTokens,
           cacheWriteTokens: row.cacheWriteTokens + cacheWriteTokens,
           avgLatencyMs: Math.round(totalLatency / newCount),
+          totalCostAmount: row.totalCostAmount + costAmount,
+          costCurrency,
           updatedAt: now,
         })
         .where(eq(dailyConsumptionStats.id, row.id));
@@ -271,8 +292,8 @@ export class GatewaySideEffectsService {
         cacheReadTokens,
         cacheWriteTokens,
         avgLatencyMs: latencyMs,
-        totalCostAmount: 0,
-        costCurrency: 'USD',
+        totalCostAmount: costAmount,
+        costCurrency,
         updatedAt: now,
       });
     }

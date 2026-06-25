@@ -61,6 +61,29 @@ export class CostLedgerRepository {
     return rows[0];
   }
 
+  async findActivePricingForUpstream(
+    providerType: ProviderType,
+    upstreamKeyId: string,
+    realModelName: string,
+    at = new Date(),
+  ): Promise<PricingEntryRow | undefined> {
+    const rows = await this.db
+      .select()
+      .from(pricingEntries)
+      .where(
+        and(
+          eq(pricingEntries.providerType, providerType),
+          eq(pricingEntries.upstreamKeyId, upstreamKeyId),
+          eq(pricingEntries.realModelName, realModelName),
+          lt(pricingEntries.effectiveFrom, at),
+          or(gt(pricingEntries.effectiveUntil, at), isNull(pricingEntries.effectiveUntil)),
+        ),
+      )
+      .orderBy(desc(pricingEntries.effectiveFrom))
+      .limit(1);
+    return rows[0];
+  }
+
   async listPricingEntries(): Promise<PricingEntryRow[]> {
     return this.db
       .select()

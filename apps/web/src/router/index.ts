@@ -68,6 +68,18 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'layout.menu.traces' },
       },
       {
+        path: '/pricing',
+        name: 'pricing',
+        component: () => import('../pages/Pricing.vue'),
+        meta: { titleKey: 'layout.menu.pricing' },
+      },
+      {
+        path: '/plans',
+        name: 'plans',
+        component: () => import('../pages/Plans.vue'),
+        meta: { titleKey: 'layout.menu.plans' },
+      },
+      {
         path: '/settings',
         name: 'settings',
         component: () => import('../pages/Settings.vue'),
