@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, h } from 'vue';
+import { useRouter } from 'vue-router';
 import { useMessage } from 'naive-ui';
 import {
   NCard,
@@ -24,6 +25,7 @@ import type { DataTableColumns } from 'naive-ui';
 
 const { t } = useI18n();
 const message = useMessage();
+const router = useRouter();
 
 const loading = ref(false);
 const traces = ref<TraceSummaryContract[]>([]);
@@ -103,6 +105,38 @@ function statusTag(status: string) {
   );
 }
 
+function linkButton(label: string, onClick: () => void) {
+  return h(
+    NButton,
+    {
+      text: true,
+      type: 'primary',
+      size: 'small',
+      onClick: (e: MouseEvent) => {
+        e.stopPropagation();
+        onClick();
+      },
+    },
+    { default: () => label },
+  );
+}
+
+function targetLink(row: TraceSummaryContract) {
+  if (!row.resolvedTargetType || !row.resolvedTargetId) {
+    return row.requestedTargetName;
+  }
+  const routeName = row.resolvedTargetType === 'public_model' ? 'public-models' : 'model-groups';
+  return linkButton(row.requestedTargetName, () => {
+    void router.push({ name: routeName, query: { highlight: row.resolvedTargetId! } });
+  });
+}
+
+function upstreamLink(upstreamKeyId: string) {
+  return linkButton(upstreamKeyId, () => {
+    void router.push({ name: 'upstream-keys', query: { highlight: upstreamKeyId } });
+  });
+}
+
 const columns = computed<DataTableColumns<TraceSummaryContract>>(() => [
   {
     title: t('trace.time'),
@@ -117,8 +151,18 @@ const columns = computed<DataTableColumns<TraceSummaryContract>>(() => [
     width: 200,
     render: (row) => row.requestTraceId,
   },
-  { title: t('trace.target'), key: 'requestedTargetName', ellipsis: { tooltip: true } },
-  { title: t('trace.upstream'), key: 'upstreamKeyId', ellipsis: { tooltip: true } },
+  {
+    title: t('trace.target'),
+    key: 'requestedTargetName',
+    ellipsis: { tooltip: true },
+    render: (row) => targetLink(row),
+  },
+  {
+    title: t('trace.upstream'),
+    key: 'upstreamKeyId',
+    ellipsis: { tooltip: true },
+    render: (row) => upstreamLink(row.upstreamKeyId),
+  },
   { title: t('trace.model'), key: 'realModelName', ellipsis: { tooltip: true } },
   { title: t('trace.status'), key: 'status', width: 90, render: (row) => statusTag(row.status) },
   {
@@ -140,7 +184,12 @@ const eventColumns = computed<DataTableColumns<TraceEventContract>>(() => [
     width: 90,
     render: (row) => (row.status ? statusTag(row.status) : '-'),
   },
-  { title: t('trace.upstream'), key: 'upstreamKeyId', ellipsis: { tooltip: true } },
+  {
+    title: t('trace.upstream'),
+    key: 'upstreamKeyId',
+    ellipsis: { tooltip: true },
+    render: (row) => (row.upstreamKeyId ? upstreamLink(row.upstreamKeyId) : '-'),
+  },
   { title: t('trace.model'), key: 'realModelName', ellipsis: { tooltip: true } },
   {
     title: t('trace.error'),

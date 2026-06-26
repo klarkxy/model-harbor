@@ -12,6 +12,9 @@ export interface UsageSummary {
   stickyHitCount: number;
   successRate: number;
   stickyHitRate: number;
+  costAmount: number;
+  costCurrency: string | null;
+  unpricedCount: number;
 }
 
 export interface UsageGroupItem {
@@ -21,6 +24,9 @@ export interface UsageGroupItem {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  costAmount: number;
+  costCurrency: string | null;
+  unpricedCount: number;
 }
 
 export interface UsageGroups {

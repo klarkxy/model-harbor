@@ -15,7 +15,7 @@ function dayStart(d: Date): Date {
 export async function traceRoutes(app: FastifyInstance, deps: TraceRouteDeps): Promise<void> {
   const service = new TraceService(deps.db);
 
-  app.get('/', async (req, reply) => {
+  app.get('/', async (req) => {
     const query = req.query as { since?: string; limit?: string };
     const since = query.since ? new Date(query.since) : dayStart(new Date());
     const limit = query.limit ? Number.parseInt(query.limit, 10) : 100;

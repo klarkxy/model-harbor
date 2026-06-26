@@ -1,13 +1,24 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, h } from 'vue';
 import { useMessage } from 'naive-ui';
-import { NCard, NSpace, NStatistic, NDataTable, NSelect, NTag, NSpin, NEmpty } from 'naive-ui';
+import {
+  NCard,
+  NSpace,
+  NStatistic,
+  NDataTable,
+  NSelect,
+  NTag,
+  NSpin,
+  NEmpty,
+  NDatePicker,
+} from 'naive-ui';
 import { useI18n } from 'vue-i18n';
-import { getUsageDashboard } from '../api/admin/usage.js';
+import { getUsageDashboard, getDailyConsumptionStats } from '../api/admin/usage.js';
 import type {
   UsageDashboardContract,
   UsageRecordContract,
   UsageGroupItemContract,
+  DailyConsumptionStatContract,
 } from '@manageyourllm/contracts';
 import type { DataTableColumns } from 'naive-ui';
 
@@ -17,6 +28,10 @@ const message = useMessage();
 const loading = ref(false);
 const dashboard = ref<UsageDashboardContract | null>(null);
 const sinceOption = ref<'today' | 'last7' | 'last30'>('today');
+
+const dailyLoading = ref(false);
+const dailyStats = ref<DailyConsumptionStatContract[]>([]);
+const dailyDateTs = ref<number>(Date.now());
 
 const sinceOptions = [
   { label: t('usage.today'), value: 'today' },
@@ -51,10 +66,34 @@ async function load() {
   }
 }
 
-onMounted(load);
+async function loadDaily() {
+  dailyLoading.value = true;
+  try {
+    const date = formatDayDate(new Date(dailyDateTs.value));
+    dailyStats.value = await getDailyConsumptionStats(date);
+  } catch (err) {
+    message.error(err instanceof Error ? err.message : t('common.loadFailed'));
+  } finally {
+    dailyLoading.value = false;
+  }
+}
+
+onMounted(() => {
+  load();
+  loadDaily();
+});
+
+function formatDayDate(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
 
 function percent(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
+}
+
+function costLabel(amount: number | null, currency: string | null): string {
+  if (amount == null || currency == null) return '-';
+  return `${(amount / 1_000_000).toFixed(4)} ${currency}`;
 }
 
 function tokens(row: {
@@ -69,6 +108,12 @@ const groupColumns = computed<DataTableColumns<UsageGroupItemContract>>(() => [
   { title: t('usage.name'), key: 'name' },
   { title: t('usage.requestCount'), key: 'requestCount' },
   { title: t('usage.tokens'), key: 'tokens', render: (row) => tokens(row) },
+  {
+    title: t('usage.cost'),
+    key: 'cost',
+    render: (row) => costLabel(row.costAmount, row.costCurrency),
+  },
+  { title: t('usage.unpricedCount'), key: 'unpricedCount' },
 ]);
 
 const recentColumns = computed<DataTableColumns<UsageRecordContract>>(() => [
@@ -89,6 +134,28 @@ const recentColumns = computed<DataTableColumns<UsageRecordContract>>(() => [
   },
   { title: t('usage.latency'), key: 'latencyMs', render: (row) => `${row.latencyMs} ms` },
   { title: t('usage.tokens'), key: 'tokens', render: (row) => tokens(row) },
+  {
+    title: t('usage.cost'),
+    key: 'cost',
+    render: (row) => costLabel(row.costAmount, row.costCurrency),
+  },
+]);
+
+const dailyColumns = computed<DataTableColumns<DailyConsumptionStatContract>>(() => [
+  { title: t('usage.upstream'), key: 'upstreamKeyId' },
+  { title: t('usage.model'), key: 'realModelName' },
+  { title: t('usage.requestCount'), key: 'requestCount' },
+  { title: t('usage.tokens'), key: 'tokens', render: (row) => tokens(row) },
+  {
+    title: t('usage.avgLatency'),
+    key: 'avgLatencyMs',
+    render: (row) => `${row.avgLatencyMs} ms`,
+  },
+  {
+    title: t('usage.cost'),
+    key: 'cost',
+    render: (row) => costLabel(row.totalCostAmount, row.costCurrency),
+  },
 ]);
 </script>
 
@@ -120,6 +187,11 @@ const recentColumns = computed<DataTableColumns<UsageRecordContract>>(() => [
             :label="t('usage.stickyHitRate')"
             :value="percent(dashboard.summary.stickyHitRate)"
           />
+          <NStatistic
+            :label="t('usage.cost')"
+            :value="costLabel(dashboard.summary.costAmount, dashboard.summary.costCurrency)"
+          />
+          <NStatistic :label="t('usage.unpricedCount')" :value="dashboard.summary.unpricedCount" />
         </NSpace>
 
         <NCard :title="t('usage.byApp')" size="small">
@@ -169,6 +241,20 @@ const recentColumns = computed<DataTableColumns<UsageRecordContract>>(() => [
       </template>
 
       <NEmpty v-else :description="t('usage.empty')" />
+
+      <NCard :title="t('usage.dailyConsumptionStats')" size="small">
+        <NSpace align="center" style="margin-bottom: 12px">
+          <NDatePicker v-model:value="dailyDateTs" type="date" @update:value="loadDaily" />
+        </NSpace>
+        <NSpin v-if="dailyLoading" />
+        <NDataTable
+          v-else
+          :columns="dailyColumns"
+          :data="dailyStats"
+          :bordered="false"
+          size="small"
+        />
+      </NCard>
     </NSpace>
   </NCard>
 </template>

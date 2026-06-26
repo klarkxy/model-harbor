@@ -1,8 +1,18 @@
 import { api } from '../client.js';
-import type { PlanContract, CreatePlanRequest, UpdatePlanRequest } from '@manageyourllm/contracts';
+import type {
+  PlanContract,
+  PlanReminderContract,
+  CreatePlanRequest,
+  UpdatePlanRequest,
+} from '@manageyourllm/contracts';
 
 export async function listPlans(): Promise<PlanContract[]> {
   const res = await api.get<{ data: PlanContract[] }>('/api/admin/plans');
+  return res.data;
+}
+
+export async function getPlanReminders(): Promise<PlanReminderContract[]> {
+  const res = await api.get<{ data: PlanReminderContract[] }>('/api/admin/plans/reminders');
   return res.data;
 }
 

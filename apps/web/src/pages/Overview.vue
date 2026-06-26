@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { NCard, NSpace, NStatistic, NGrid, NGi, NSpin } from 'naive-ui';
+import { ref, onMounted, computed } from 'vue';
+import { NCard, NSpace, NStatistic, NGrid, NGi, NSpin, NAlert, NThing } from 'naive-ui';
 import { useI18n } from 'vue-i18n';
 import { listUpstreamKeys } from '../api/admin/upstream-keys.js';
 import { listPublicModels } from '../api/admin/public-models.js';
@@ -8,6 +8,8 @@ import { listModelGroups } from '../api/admin/model-groups.js';
 import { listApps } from '../api/admin/apps.js';
 import { listConsumerKeys } from '../api/admin/consumer-keys.js';
 import { listBackups } from '../api/admin/backups.js';
+import { getPlanReminders } from '../api/admin/plans.js';
+import type { PlanReminderContract } from '@manageyourllm/contracts';
 
 const { t } = useI18n();
 const loading = ref(true);
@@ -19,11 +21,12 @@ const stats = ref({
   consumerKeys: 0,
   backups: 0,
 });
+const reminders = ref<PlanReminderContract[]>([]);
 
 async function loadStats() {
   loading.value = true;
   try {
-    const [upstreamKeys, publicModels, modelGroups, apps, consumerKeys, backups] =
+    const [upstreamKeys, publicModels, modelGroups, apps, consumerKeys, backups, planReminders] =
       await Promise.all([
         listUpstreamKeys(),
         listPublicModels(),
@@ -31,6 +34,7 @@ async function loadStats() {
         listApps(),
         listConsumerKeys(),
         listBackups(),
+        getPlanReminders(),
       ]);
     stats.value = {
       upstreamKeys: upstreamKeys.length,
@@ -40,12 +44,25 @@ async function loadStats() {
       consumerKeys: consumerKeys.length,
       backups: backups.length,
     };
+    reminders.value = planReminders;
   } finally {
     loading.value = false;
   }
 }
 
 onMounted(loadStats);
+
+function reminderText(reminder: PlanReminderContract): string {
+  const parts = reminder.reasons.map((reason) => t(`overview.reminderReason.${reason}`));
+  const ratio = `${(reminder.remainingRatio * 100).toFixed(0)}%`;
+  const days = reminder.daysUntilExpiry;
+  if (days != null) {
+    return `${parts.join(' · ')} · ${t('overview.remainingRatio')}: ${ratio} · ${t('overview.daysUntilExpiry')}: ${days}`;
+  }
+  return `${parts.join(' · ')} · ${t('overview.remainingRatio')}: ${ratio}`;
+}
+
+const hasReminders = computed(() => reminders.value.length > 0);
 </script>
 
 <template>
@@ -73,6 +90,19 @@ onMounted(loadStats);
           </NGi>
         </NGrid>
       </NSpin>
+    </NCard>
+
+    <NCard v-if="hasReminders" :title="t('overview.planReminders')" size="small">
+      <NSpace vertical>
+        <NAlert
+          v-for="reminder in reminders"
+          :key="reminder.plan.id"
+          type="warning"
+          :show-icon="true"
+        >
+          <NThing :title="reminder.plan.name" :description="reminderText(reminder)" />
+        </NAlert>
+      </NSpace>
     </NCard>
   </NSpace>
 </template>

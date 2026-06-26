@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   listPlansResponseSchema,
   planResponseSchema,
+  planRemindersResponseSchema,
   createPlanRequestSchema,
   updatePlanRequestSchema,
   successEnvelope,
@@ -28,6 +29,13 @@ export async function planRoutes(app: FastifyInstance, deps: PlanRouteDeps): Pro
   app.get('/', async () => {
     const plans = await service.listPlans();
     return listPlansResponseSchema.parse({ data: serializeForContract(plans) });
+  });
+
+  app.get('/reminders', async () => {
+    const reminders = await service.getPlanReminders();
+    return planRemindersResponseSchema.parse({
+      data: serializeForContract(reminders),
+    });
   });
 
   app.post('/', async (req) => {

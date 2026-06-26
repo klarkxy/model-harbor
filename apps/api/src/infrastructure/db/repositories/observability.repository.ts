@@ -1,4 +1,4 @@
-import { eq, desc, lt, and, gte, sql, count, sum, isNotNull } from 'drizzle-orm';
+import { eq, desc, lt, and, gte, sql, count, sum, max, isNotNull } from 'drizzle-orm';
 import { generateId } from '@manageyourllm/shared';
 import type { Db } from '../client.js';
 import {
@@ -54,7 +54,9 @@ export class ObservabilityRepository {
       requestedTargetName: string;
       upstreamKeyId: string;
       realModelName: string;
-      status: string;
+      resolvedTargetType: 'public_model' | 'model_group' | null;
+      resolvedTargetId: string | null;
+      status: 'success' | 'error' | 'pending';
       latencyMs: number;
       inputTokens: number | null;
       outputTokens: number | null;
@@ -83,6 +85,8 @@ export class ObservabilityRepository {
         requestedTargetName: usageRecords.requestedTargetName,
         upstreamKeyId: usageRecords.upstreamKeyId,
         realModelName: usageRecords.realModelName,
+        resolvedTargetType: usageRecords.resolvedTargetType,
+        resolvedTargetId: usageRecords.resolvedTargetId,
         status: usageRecords.status,
         latencyMs: usageRecords.latencyMs,
         inputTokens: usageRecords.inputTokens,
@@ -100,6 +104,9 @@ export class ObservabilityRepository {
     return rows.map((r) => ({
       ...r,
       requestTraceId: r.requestTraceId!,
+      resolvedTargetType: r.resolvedTargetType as 'public_model' | 'model_group' | null,
+      resolvedTargetId: r.resolvedTargetId ?? null,
+      status: r.status as 'success' | 'error' | 'pending',
       failedCount: Number(r.failedCount ?? 0),
     }));
   }
@@ -121,6 +128,9 @@ export class ObservabilityRepository {
     outputTokens: number;
     totalTokens: number;
     stickyHitCount: number;
+    costAmount: number;
+    costCurrency: string | null;
+    unpricedCount: number;
   }> {
     const [row] = await this.db
       .select({
@@ -131,9 +141,18 @@ export class ObservabilityRepository {
         outputTokens: sum(usageRecords.outputTokens),
         totalTokens: sum(usageRecords.totalTokens),
         stickyHitCount: sql<number>`sum(case when ${usageRecords.stickyHit} = 1 then 1 else 0 end)`,
+        costAmount: sum(usageRecords.costAmount),
+        pricedCount: sql<number>`count(${usageRecords.costAmount})`,
       })
       .from(usageRecords)
       .where(gte(usageRecords.createdAt, since));
+
+    const firstCurrency = await this.db
+      .select({ currency: usageRecords.costCurrency })
+      .from(usageRecords)
+      .where(and(gte(usageRecords.createdAt, since), isNotNull(usageRecords.costCurrency)))
+      .limit(1);
+
     return {
       requestCount: row?.requestCount ?? 0,
       successCount: row?.successCount ?? 0,
@@ -142,6 +161,9 @@ export class ObservabilityRepository {
       outputTokens: Number(row?.outputTokens ?? 0),
       totalTokens: Number(row?.totalTokens ?? 0),
       stickyHitCount: row?.stickyHitCount ?? 0,
+      costAmount: Number(row?.costAmount ?? 0),
+      costCurrency: firstCurrency[0]?.currency ?? null,
+      unpricedCount: (row?.requestCount ?? 0) - (row?.pricedCount ?? 0),
     };
   }
 
@@ -153,6 +175,9 @@ export class ObservabilityRepository {
       inputTokens: number;
       outputTokens: number;
       totalTokens: number;
+      costAmount: number;
+      costCurrency: string | null;
+      unpricedCount: number;
     }>
   > {
     const rows = await this.db
@@ -163,6 +188,9 @@ export class ObservabilityRepository {
         inputTokens: sum(usageRecords.inputTokens),
         outputTokens: sum(usageRecords.outputTokens),
         totalTokens: sum(usageRecords.totalTokens),
+        costAmount: sum(usageRecords.costAmount),
+        costCurrency: max(usageRecords.costCurrency),
+        pricedCount: sql<number>`count(${usageRecords.costAmount})`,
       })
       .from(usageRecords)
       .innerJoin(apps, eq(usageRecords.appId, apps.id))
@@ -176,6 +204,9 @@ export class ObservabilityRepository {
       inputTokens: Number(r.inputTokens ?? 0),
       outputTokens: Number(r.outputTokens ?? 0),
       totalTokens: Number(r.totalTokens ?? 0),
+      costAmount: Number(r.costAmount ?? 0),
+      costCurrency: r.costCurrency,
+      unpricedCount: r.requestCount - (r.pricedCount ?? 0),
     }));
   }
 
@@ -187,6 +218,9 @@ export class ObservabilityRepository {
       inputTokens: number;
       outputTokens: number;
       totalTokens: number;
+      costAmount: number;
+      costCurrency: string | null;
+      unpricedCount: number;
     }>
   > {
     const rows = await this.db
@@ -197,6 +231,9 @@ export class ObservabilityRepository {
         inputTokens: sum(usageRecords.inputTokens),
         outputTokens: sum(usageRecords.outputTokens),
         totalTokens: sum(usageRecords.totalTokens),
+        costAmount: sum(usageRecords.costAmount),
+        costCurrency: max(usageRecords.costCurrency),
+        pricedCount: sql<number>`count(${usageRecords.costAmount})`,
       })
       .from(usageRecords)
       .innerJoin(consumerKeys, eq(usageRecords.consumerKeyId, consumerKeys.id))
@@ -210,6 +247,9 @@ export class ObservabilityRepository {
       inputTokens: Number(r.inputTokens ?? 0),
       outputTokens: Number(r.outputTokens ?? 0),
       totalTokens: Number(r.totalTokens ?? 0),
+      costAmount: Number(r.costAmount ?? 0),
+      costCurrency: r.costCurrency,
+      unpricedCount: r.requestCount - (r.pricedCount ?? 0),
     }));
   }
 
@@ -221,6 +261,9 @@ export class ObservabilityRepository {
       inputTokens: number;
       outputTokens: number;
       totalTokens: number;
+      costAmount: number;
+      costCurrency: string | null;
+      unpricedCount: number;
     }>
   > {
     const rows = await this.db
@@ -231,6 +274,9 @@ export class ObservabilityRepository {
         inputTokens: sum(usageRecords.inputTokens),
         outputTokens: sum(usageRecords.outputTokens),
         totalTokens: sum(usageRecords.totalTokens),
+        costAmount: sum(usageRecords.costAmount),
+        costCurrency: max(usageRecords.costCurrency),
+        pricedCount: sql<number>`count(${usageRecords.costAmount})`,
       })
       .from(usageRecords)
       .innerJoin(upstreamKeys, eq(usageRecords.upstreamKeyId, upstreamKeys.id))
@@ -244,6 +290,9 @@ export class ObservabilityRepository {
       inputTokens: Number(r.inputTokens ?? 0),
       outputTokens: Number(r.outputTokens ?? 0),
       totalTokens: Number(r.totalTokens ?? 0),
+      costAmount: Number(r.costAmount ?? 0),
+      costCurrency: r.costCurrency,
+      unpricedCount: r.requestCount - (r.pricedCount ?? 0),
     }));
   }
 
@@ -254,6 +303,9 @@ export class ObservabilityRepository {
       inputTokens: number;
       outputTokens: number;
       totalTokens: number;
+      costAmount: number;
+      costCurrency: string | null;
+      unpricedCount: number;
     }>
   > {
     const rows = await this.db
@@ -263,6 +315,9 @@ export class ObservabilityRepository {
         inputTokens: sum(usageRecords.inputTokens),
         outputTokens: sum(usageRecords.outputTokens),
         totalTokens: sum(usageRecords.totalTokens),
+        costAmount: sum(usageRecords.costAmount),
+        costCurrency: max(usageRecords.costCurrency),
+        pricedCount: sql<number>`count(${usageRecords.costAmount})`,
       })
       .from(usageRecords)
       .where(gte(usageRecords.createdAt, since))
@@ -274,6 +329,9 @@ export class ObservabilityRepository {
       inputTokens: Number(r.inputTokens ?? 0),
       outputTokens: Number(r.outputTokens ?? 0),
       totalTokens: Number(r.totalTokens ?? 0),
+      costAmount: Number(r.costAmount ?? 0),
+      costCurrency: r.costCurrency,
+      unpricedCount: r.requestCount - (r.pricedCount ?? 0),
     }));
   }
 

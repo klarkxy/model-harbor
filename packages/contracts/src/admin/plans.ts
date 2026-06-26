@@ -53,9 +53,18 @@ export const updatePlanRequestSchema = z.object({
   notes: z.string().nullable().optional(),
 });
 
+export const planReminderSchema = z.object({
+  plan: planSchema,
+  reasons: z.array(z.enum(['expiring', 'low_balance'])),
+  daysUntilExpiry: z.number().nullable(),
+  remainingRatio: z.number().min(0).max(1),
+});
+
 export const listPlansResponseSchema = listEnvelope(planSchema);
 export const planResponseSchema = successEnvelope(planSchema);
+export const planRemindersResponseSchema = listEnvelope(planReminderSchema);
 
 export type PlanContract = z.infer<typeof planSchema>;
 export type CreatePlanRequest = z.infer<typeof createPlanRequestSchema>;
 export type UpdatePlanRequest = z.infer<typeof updatePlanRequestSchema>;
+export type PlanReminderContract = z.infer<typeof planReminderSchema>;

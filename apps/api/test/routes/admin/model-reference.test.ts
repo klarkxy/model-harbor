@@ -4,7 +4,7 @@ import { buildServer } from '../../../src/server/build-server.js';
 import { createTestDb } from '../../../src/infrastructure/db/test-helper.js';
 import { ModelReferenceRepository } from '../../../src/infrastructure/db/repositories/model-reference.repository.js';
 import type { TestDb } from '../../../src/infrastructure/db/test-helper.js';
-import type { ModelReferenceRegion } from '../../../src/infrastructure/db/schema.js';
+
 import type { ModelReferenceEntryInput } from '../../../src/infrastructure/model-reference/arena-client.js';
 
 function makeEntry(model: string): ModelReferenceEntryInput {

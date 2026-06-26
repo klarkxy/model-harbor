@@ -1,9 +1,6 @@
 import { ModelReferenceRepository } from '../infrastructure/db/repositories/model-reference.repository.js';
 import { TargetRepository } from '../infrastructure/db/repositories/target.repository.js';
-import {
-  ArenaModelReferenceClient,
-  type ModelReferenceEntryInput,
-} from '../infrastructure/model-reference/arena-client.js';
+import { ArenaModelReferenceClient } from '../infrastructure/model-reference/arena-client.js';
 import type { Db } from '../infrastructure/db/client.js';
 import type {
   ModelReferenceEntryRow,

@@ -37,6 +37,13 @@ export interface Messages {
     apps: string;
     consumerKeys: string;
     backups: string;
+    planReminders: string;
+    remainingRatio: string;
+    daysUntilExpiry: string;
+    reminderReason: {
+      expiring: string;
+      low_balance: string;
+    };
   };
   upstreamKeys: {
     title: string;
@@ -272,6 +279,10 @@ export interface Messages {
     success: string;
     error: string;
     latency: string;
+    cost: string;
+    unpricedCount: string;
+    avgLatency: string;
+    dailyConsumptionStats: string;
     empty: string;
   };
   settings: {

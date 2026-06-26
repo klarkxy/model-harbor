@@ -8,6 +8,8 @@ export const traceSummarySchema = z.object({
   requestedTargetName: z.string(),
   upstreamKeyId: z.string(),
   realModelName: z.string(),
+  resolvedTargetType: z.enum(['public_model', 'model_group']).nullable(),
+  resolvedTargetId: z.string().nullable(),
   status: z.string(),
   latencyMs: z.number(),
   inputTokens: z.number().nullable(),

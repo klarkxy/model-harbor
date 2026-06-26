@@ -39,6 +39,13 @@ const messages: Messages = {
     apps: 'Apps',
     consumerKeys: 'Consumer Keys',
     backups: 'Backups',
+    planReminders: 'Plan Reminders',
+    remainingRatio: 'Remaining',
+    daysUntilExpiry: 'Days until expiry',
+    reminderReason: {
+      expiring: 'Expiring soon',
+      low_balance: 'Low balance',
+    },
   },
   upstreamKeys: {
     title: 'Upstream Keys',
@@ -274,6 +281,10 @@ const messages: Messages = {
     success: 'Success',
     error: 'Error',
     latency: 'Latency',
+    cost: 'Cost',
+    unpricedCount: 'Unpriced',
+    avgLatency: 'Avg Latency',
+    dailyConsumptionStats: 'Daily Consumption Stats',
     empty: 'No usage data yet',
   },
   settings: {

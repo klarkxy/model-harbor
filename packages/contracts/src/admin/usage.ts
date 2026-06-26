@@ -11,6 +11,9 @@ export const usageSummarySchema = z.object({
   stickyHitCount: z.number().int().nonnegative(),
   successRate: z.number().min(0).max(1),
   stickyHitRate: z.number().min(0).max(1),
+  costAmount: z.number().nullable(),
+  costCurrency: z.string().nullable(),
+  unpricedCount: z.number().int().nonnegative(),
 });
 
 export const usageGroupItemSchema = z.object({
@@ -20,6 +23,9 @@ export const usageGroupItemSchema = z.object({
   inputTokens: z.number().int().nonnegative(),
   outputTokens: z.number().int().nonnegative(),
   totalTokens: z.number().int().nonnegative(),
+  costAmount: z.number().nullable(),
+  costCurrency: z.string().nullable(),
+  unpricedCount: z.number().int().nonnegative(),
 });
 
 export const usageRecordSchema = z.object({
@@ -65,7 +71,29 @@ export const usageDashboardSchema = z.object({
 
 export const usageDashboardResponseSchema = successEnvelope(usageDashboardSchema);
 
+export const dailyConsumptionStatSchema = z.object({
+  id: z.string(),
+  upstreamKeyId: z.string(),
+  realModelName: z.string(),
+  dayDate: z.string(),
+  requestCount: z.number().int().nonnegative(),
+  successCount: z.number().int().nonnegative(),
+  errorCount: z.number().int().nonnegative(),
+  inputTokens: z.number().int().nonnegative(),
+  outputTokens: z.number().int().nonnegative(),
+  totalTokens: z.number().int().nonnegative(),
+  avgLatencyMs: z.number().int().nonnegative(),
+  totalCostAmount: z.number(),
+  costCurrency: z.string(),
+  updatedAt: z.string().datetime(),
+});
+
+export const dailyConsumptionStatsResponseSchema = successEnvelope(
+  z.array(dailyConsumptionStatSchema),
+);
+
 export type UsageSummaryContract = z.infer<typeof usageSummarySchema>;
 export type UsageGroupItemContract = z.infer<typeof usageGroupItemSchema>;
 export type UsageRecordContract = z.infer<typeof usageRecordSchema>;
 export type UsageDashboardContract = z.infer<typeof usageDashboardSchema>;
+export type DailyConsumptionStatContract = z.infer<typeof dailyConsumptionStatSchema>;

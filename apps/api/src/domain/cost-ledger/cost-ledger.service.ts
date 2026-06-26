@@ -126,4 +126,39 @@ export class CostLedgerService {
   async listExpiringPlans(withinMs = 7 * 24 * 60 * 60 * 1000): Promise<PlanRow[]> {
     return this.repo().findExpiringPlans(withinMs);
   }
+
+  async getPlanReminders(
+    at = new Date(),
+    defaultReminderDays = 7,
+  ): Promise<
+    Array<{
+      plan: PlanRow;
+      reasons: Array<'expiring' | 'low_balance'>;
+      daysUntilExpiry: number | null;
+      remainingRatio: number;
+    }>
+  > {
+    const plans = await this.repo().listPlans();
+    const reminders = [];
+    for (const plan of plans) {
+      const reasons: Array<'expiring' | 'low_balance'> = [];
+      let daysUntilExpiry: number | null = null;
+      if (plan.validUntil) {
+        const ms = plan.validUntil.getTime() - at.getTime();
+        daysUntilExpiry = Math.max(0, Math.floor(ms / (24 * 60 * 60 * 1000)));
+        const reminderDays = plan.reminderDays ?? defaultReminderDays;
+        if (daysUntilExpiry <= reminderDays) {
+          reasons.push('expiring');
+        }
+      }
+      const remainingRatio = plan.totalAmount > 0 ? plan.remainingAmount / plan.totalAmount : 0;
+      if (remainingRatio <= 0.1) {
+        reasons.push('low_balance');
+      }
+      if (reasons.length > 0) {
+        reminders.push({ plan, reasons, daysUntilExpiry, remainingRatio });
+      }
+    }
+    return reminders;
+  }
 }

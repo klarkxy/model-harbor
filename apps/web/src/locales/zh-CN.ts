@@ -39,6 +39,13 @@ const messages: Messages = {
     apps: '应用',
     consumerKeys: 'Consumer Key',
     backups: '备份',
+    planReminders: '套餐提醒',
+    remainingRatio: '剩余比例',
+    daysUntilExpiry: '剩余天数',
+    reminderReason: {
+      expiring: '即将到期',
+      low_balance: '余额不足',
+    },
   },
   upstreamKeys: {
     title: '上游密钥',
@@ -274,6 +281,10 @@ const messages: Messages = {
     success: '成功',
     error: '失败',
     latency: '延迟',
+    cost: '成本',
+    unpricedCount: '缺价',
+    avgLatency: '平均延迟',
+    dailyConsumptionStats: '每日消费统计',
     empty: '暂无用量数据',
   },
   settings: {

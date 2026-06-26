@@ -4,61 +4,61 @@
 
 ## Usage APIs
 
-- [ ] P5-001 Implement usage totals API
+- [x] P5-001 Implement usage totals API
   - Depends on: P3-081
   - Deliverables: totals for today/24h/7d
   - Acceptance: tests cover success count, error count, tokens, sticky rate.
 
-- [ ] P5-002 Implement usage breakdown APIs
+- [x] P5-002 Implement usage breakdown APIs
   - Depends on: P5-001
   - Deliverables: by app, consumer key, upstream, target
   - Acceptance: seeded usage rows aggregate correctly.
 
-- [ ] P5-003 Implement recent usage API
+- [x] P5-003 Implement recent usage API
   - Depends on: P3-081
   - Deliverables: recent request list with trace id
   - Acceptance: pagination/limit works and no secret fields returned.
 
-- [ ] P5-004 Implement daily consumption stats API
+- [x] P5-004 Implement daily consumption stats API
   - Depends on: P1-036, P3-081
   - Deliverables: per day/provider/model stats
   - Acceptance: successful requests upsert daily rows.
 
 ## Trace APIs and UI
 
-- [ ] P5-010 Implement trace list API
+- [x] P5-010 Implement trace list API
   - Depends on: P3-080
   - Deliverables: recent trace summaries
   - Acceptance: summaries include target, app/key ids, outcome, created time.
 
-- [ ] P5-011 Implement trace detail API
+- [x] P5-011 Implement trace detail API
   - Depends on: P5-010
   - Deliverables: ordered trace timeline
   - Acceptance: returns all steps by trace id in order.
 
-- [ ] P5-012 Implement trace detail UI
+- [x] P5-012 Implement trace detail UI
   - Depends on: P5-011
   - Deliverables: timeline component
   - Acceptance: shows filter reasons, attempts, final result.
 
-- [ ] P5-013 Add trace navigation links
+- [x] P5-013 Add trace navigation links
   - Depends on: P5-012
   - Deliverables: links from trace to upstream/public model/consumer key where possible
   - Acceptance: links resolve to existing admin pages.
 
 ## Usage UI
 
-- [ ] P5-020 Implement Usage overview page
+- [x] P5-020 Implement Usage overview page
   - Depends on: P5-001, P5-002, P5-003
   - Deliverables: cards, breakdown tables, recent requests
   - Acceptance: mocked API test renders key stats.
 
-- [ ] P5-021 Implement consumption stats table
+- [x] P5-021 Implement consumption stats table
   - Depends on: P5-004
   - Deliverables: per upstream/model/day table
   - Acceptance: table supports filtering by upstream/day.
 
-- [ ] P5-022 Add trace entry from recent requests
+- [x] P5-022 Add trace entry from recent requests
   - Depends on: P5-012, P5-020
   - Deliverables: button/link to trace detail
   - Acceptance: click opens correct trace.
@@ -87,44 +87,44 @@
 
 ## Cost Ledger Backend
 
-- [ ] P5-040 Implement model pricing API
+- [x] P5-040 Implement model pricing API
   - Depends on: P1-037
   - Deliverables: CRUD model/provider pricing
   - Acceptance: validation rejects negative costs.
 
-- [ ] P5-041 Implement cost calculation service
+- [x] P5-041 Implement cost calculation service
   - Depends on: P5-040, P3-081
   - Deliverables: calculate request cost from usage and pricing
   - Acceptance: tests cover input/output/cache tokens and missing pricing.
 
-- [ ] P5-042 Wire cost into usage writes
+- [x] P5-042 Wire cost into usage writes
   - Depends on: P5-041
   - Deliverables: usage records/daily stats include estimated cost fields or joined cost view
   - Acceptance: request with known pricing records cost.
 
-- [ ] P5-043 Implement token/coding plan API
+- [x] P5-043 Implement token/coding plan API
   - Depends on: P1-037
   - Deliverables: CRUD plans, purchase/expiry dates, quota notes, remaining manual amount
   - Acceptance: tests cover active, expired, expiring soon.
 
-- [ ] P5-044 Implement renewal reminders
+- [x] P5-044 Implement renewal reminders
   - Depends on: P5-043
   - Deliverables: query upcoming renewals and warnings
   - Acceptance: reminder appears for plan within warning window.
 
 ## Cost Ledger UI
 
-- [ ] P5-050 Implement Cost & Plans page
+- [x] P5-050 Implement Cost & Plans page
   - Depends on: P5-040, P5-043, P5-044
   - Deliverables: pricing table, plan table, summary cards
   - Acceptance: mocked API test covers add/edit plan.
 
-- [ ] P5-051 Add cost stats to Usage page
+- [x] P5-051 Add cost stats to Usage page
   - Depends on: P5-042, P5-020
   - Deliverables: cost totals and breakdowns
   - Acceptance: missing pricing displays as unpriced, not zero-cost if ambiguous.
 
-- [ ] P5-052 Add renewal warning widget
+- [x] P5-052 Add renewal warning widget
   - Depends on: P5-044, P5-050
   - Deliverables: overview/settings warning component
   - Acceptance: expiring plan visible in UI.
@@ -133,7 +133,7 @@
 
 - [x] P5-060 Implement fixed source fetcher
   - Depends on: P1-038
-  - Deliverables: source client for chosen fixed model reference source
+  - Deliverables: source client for chosen model reference source
   - Acceptance: fixture fetch normalizes entries.
 
 - [x] P5-061 Implement model reference refresh service
@@ -202,13 +202,12 @@
 
 ## Phase 5 Closure
 
-- [ ] P5-090 Add daily-use e2e scenario
+- [x] P5-090 Add daily-use e2e scenario
   - Depends on: P5-020, P5-050, P5-063, P5-072
   - Deliverables: e2e covering usage, trace, cost, model reference, snippets
   - Acceptance: e2e passes.
 
-- [ ] P5-091 Run full verification
+- [x] P5-091 Run full verification
   - Depends on: P5-090
   - Deliverables: typecheck/test/lint/e2e results
   - Acceptance: all checks pass.
-
