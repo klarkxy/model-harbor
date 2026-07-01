@@ -1,0 +1,12 @@
+node_modules/
+dist/
+build/
+coverage/
+data/
+logs/
+backups/
+*.log
+pnpm-lock.yaml
+docs/
+litellm/
+sub2api/

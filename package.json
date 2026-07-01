@@ -1,0 +1,41 @@
+{
+  "name": "manageyourllm",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ManageYourLLM - 个人自用的大模型网关与 Provider 管理台",
+  "license": "SATA-2.0",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "predev": "pnpm --filter @manageyourllm/shared build",
+    "dev": "pnpm -r --parallel --stream dev",
+    "dev:api": "pnpm --filter @manageyourllm/api dev",
+    "dev:web": "pnpm --filter @manageyourllm/web dev",
+    "prebuild": "pnpm --filter @manageyourllm/shared build",
+    "build": "pnpm -r build",
+    "pretypecheck": "pnpm --filter @manageyourllm/shared build",
+    "typecheck": "pnpm -r typecheck",
+    "pretest": "pnpm --filter @manageyourllm/shared build",
+    "test": "pnpm -r test",
+    "e2e": "playwright test",
+    "e2e:install": "playwright install --with-deps chromium",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "@playwright/test": "^1.49.1",
+    "@types/node": "^22.10.5",
+    "eslint": "^9.18.0",
+    "globals": "^15.14.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.20.0",
+    "vitest": "^2.1.8"
+  }
+}

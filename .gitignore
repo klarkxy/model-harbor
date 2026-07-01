@@ -1,0 +1,67 @@
+node_modules/
+dist/
+build/
+.tsbuild-node/
+.vite/
+.tmp/
+.cache/
+coverage/
+*.log
+logs/
+.DS_Store
+.env
+.env.local
+.env.*.local
+data/
+backups/
+*.sqlite
+*.sqlite-journal
+*.sqlite-shm
+*.sqlite-wal
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+.codex-tmp
+.tmp*
+
+# Test artifacts
+test-results/
+playwright-report/
+.nyc_output/
+.vitest-reports/
+
+# TypeScript
+*.tsbuildinfo
+
+# Turborepo
+.turbo/
+
+# Local files
+*.local
+
+# Local learnings / per-developer notes
+.learnings/
+
+# Claude Code per-developer settings
+.claude/
+
+# Editor swap files
+*.swp
+*.swo
+
+# Secrets
+*.pem
+*.key
+
+# Deploy platforms
+.vercel/
+.netlify/
+
+# Playwright MCP temporary logs/screenshots
+.playwright-mcp/
+
+# 参考
+sub2api/
+litellm/

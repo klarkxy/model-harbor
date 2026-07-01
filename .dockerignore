@@ -1,0 +1,42 @@
+# 依赖与构建产物
+**/node_modules/
+**/dist/
+**/build/
+**/.cache/
+**/.vite/
+**/.tsbuild-node/
+**/*.tsbuildinfo
+**/coverage/
+
+# 本地数据与日志
+*.log
+logs/
+data/
+backups/
+*.sqlite
+*.sqlite-journal
+*.sqlite-shm
+*.sqlite-wal
+
+# 环境配置
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+.DS_Store
+
+# Git
+.git/
+.gitignore
+
+# 文档在运行时不需要（如需要可移除）
+*.md
+docs/
+
+# 测试报告
+e2e/
+test-results/
+playwright-report/
