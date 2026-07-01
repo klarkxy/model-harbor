@@ -17,11 +17,11 @@ describe('database migrations', () => {
 
   it('migrates empty database to the latest version', async () => {
     const version = await currentSchemaVersion(testDb.db);
-    expect(version).toBe(21);
+    expect(version).toBe(22);
     const rows = await testDb.db.select().from(schemaMigrations);
-    expect(rows).toHaveLength(21);
+    expect(rows).toHaveLength(22);
     expect(rows.map((r) => r.version)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
     ]);
   });
 
@@ -29,7 +29,7 @@ describe('database migrations', () => {
     await initSchema(testDb.db);
     await initSchema(testDb.db);
     const rows = await testDb.db.select().from(schemaMigrations);
-    expect(rows).toHaveLength(21);
+    expect(rows).toHaveLength(22);
   });
 
   it('v9 creates endpoints table', async () => {

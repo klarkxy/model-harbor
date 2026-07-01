@@ -107,6 +107,12 @@ describe('gateway upstream cooldown (per-candidate)', () => {
     // 之前 `listBreakers()` 是 pure SELECT，是 no-op，留下前一个测试的 breaker 状态。
     const { circuitBreakers } = await import('../../src/infrastructure/db/schema.js');
     await db.delete(circuitBreakers);
+    // 重置设置为默认值，避免前一个测试修改的 threshold 影响后续测试。
+    await new SettingsRepository(db).updateSettings({
+      circuitBreakerFailureThreshold: 5,
+      circuitBreakerBaseCooldownMs: 60_000,
+      circuitBreakerMaxCooldownMs: 600_000,
+    });
   });
 
   afterAll(async () => {
@@ -156,6 +162,88 @@ describe('gateway upstream cooldown (per-candidate)', () => {
     expect(breaker).toBeDefined();
     expect(breaker?.cooldownUntil).toBeDefined();
     expect(breaker!.cooldownUntil!.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('does NOT set per-candidate cooldown on first retriable failure', async () => {
+    // breaker threshold 保持默认 5，确保第一次失败不会开 breaker。
+    globalThis.fetch = async () =>
+      ({
+        status: 503,
+        ok: false,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        text: async () => JSON.stringify({ error: { message: 'server error' } }),
+      }) as Response;
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/chat/completions',
+      headers: { authorization: `Bearer ${rawKey}`, 'content-type': 'application/json' },
+      payload: JSON.stringify({
+        model: 'gpt-cooldown',
+        messages: [{ role: 'user', content: 'hi' }],
+      }),
+    });
+
+    expect(res.statusCode).toBe(502);
+
+    const rsRepo = new RoutingStateRepository(db);
+    const breaker = await rsRepo.findBreaker(upstream1Id, endpoint1Id, 'model-1');
+    expect(breaker).toBeDefined();
+    // 第一次 retriable 失败只累计窗口计数，不触发 cooldown。
+    expect(breaker?.cooldownFailureCount).toBe(1);
+    expect(breaker?.cooldownFailureWindowStart).toBeDefined();
+    expect(breaker?.cooldownUntil).toBeNull();
+  });
+
+  it('sets per-candidate cooldown after threshold failures within the window', async () => {
+    // breaker threshold 保持默认 5，让 per-candidate cooldown 逻辑先触发。
+    const rsRepo = new RoutingStateRepository(db);
+    const now = new Date();
+    // 预置第一次失败在窗口内。
+    await rsRepo.upsertBreaker({
+      providerAccountId: upstream1Id,
+      endpointId: endpoint1Id,
+      realModelName: 'model-1',
+      state: 'closed',
+      failureCount: 1,
+      successCount: 0,
+      openCount: 0,
+      cooldownUntil: null,
+      cooldownFailureCount: 1,
+      cooldownFailureWindowStart: now,
+      openedAt: null,
+      lastErrorCode: 'provider_error',
+      lastErrorMessage: 'first failure',
+    });
+
+    globalThis.fetch = async () =>
+      ({
+        status: 503,
+        ok: false,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        text: async () => JSON.stringify({ error: { message: 'server error' } }),
+      }) as Response;
+
+    const beforeRequest = Date.now();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/chat/completions',
+      headers: { authorization: `Bearer ${rawKey}`, 'content-type': 'application/json' },
+      payload: JSON.stringify({
+        model: 'gpt-cooldown',
+        messages: [{ role: 'user', content: 'hi' }],
+      }),
+    });
+
+    expect(res.statusCode).toBe(502);
+
+    const breaker = await rsRepo.findBreaker(upstream1Id, endpoint1Id, 'model-1');
+    expect(breaker).toBeDefined();
+    expect(breaker?.cooldownFailureCount).toBe(2);
+    // 第二次失败在 60s 窗口内，应触发 per-candidate cooldown。
+    expect(breaker?.cooldownUntil).toBeDefined();
+    expect(breaker!.cooldownUntil!.getTime()).toBeGreaterThan(beforeRequest);
+    expect(breaker!.cooldownUntil!.getTime()).toBeLessThanOrEqual(beforeRequest + 10_000);
   });
 
   it('routes around a breaker in cooldown on the next request', async () => {

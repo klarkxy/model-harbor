@@ -20,6 +20,14 @@ import { getErrorRoutingBehavior, type NormalizedError, type ChatUsageIR } from 
 import type { CandidateSnapshot } from './routing.types.js';
 import type { AdminSettingsRow, QuotaPeriod } from '../infrastructure/db/schema.js';
 
+/**
+ * LiteLLM 借鉴：per-candidate cooldown 触发阈值。
+ * 在 60s 窗口内累计 2 次及以上 retriable 失败才触发 cooldown，避免单次抖动。
+ * v1 硬编码；后续可迁移到 admin_settings。
+ */
+const COOLDOWN_FAILURE_WINDOW_MS = 60_000;
+const COOLDOWN_FAILURE_THRESHOLD = 2;
+
 export interface ExecutionBaseInfo {
   requestTraceId: string;
   clientId: string;
@@ -268,11 +276,26 @@ export class GatewaySideEffectsService {
       await this.ensureStickyBinding(base, candidate, info, now);
       await this.ensureStickySession(base, candidate, info, now);
       await this.handleBreakerSuccess(candidate);
+      // LiteLLM 借鉴：candidate 成功响应后重置 cooldown 失败窗口。
+      await this.routingStateRepo.resetCooldownFailureWindow(
+        candidate.providerAccount.id,
+        candidate.endpoint.id,
+        candidate.realModelName,
+        now,
+      );
     } else if (isRetriableFailure(info.error)) {
-      // 收口 #2：每个 retriable 失败立即叠加 per-candidate 指数退避，与熔断器阈值独立。
-      // 即便熔断器关闭或未达阈值，broken upstream 也会在 (base, base*2, base*4, ...) 上冷却，
-      // 防止前 (threshold-1) 次失败毫无间隔地重击 upstream。
-      await this.setCandidateCooldown(base, candidate, info.error, settings, now);
+      // LiteLLM 借鉴：per-candidate cooldown 只在窗口内失败次数达到阈值后才触发，
+      // 避免单次抖动就把 candidate 打入冷却。
+      const { count } = await this.routingStateRepo.incrementCooldownFailureAtomic(
+        candidate.providerAccount.id,
+        candidate.endpoint.id,
+        candidate.realModelName,
+        COOLDOWN_FAILURE_WINDOW_MS,
+        now,
+      );
+      if (count >= COOLDOWN_FAILURE_THRESHOLD) {
+        await this.setCandidateCooldown(base, candidate, info.error, settings, now);
+      }
       if (settings.enableCircuitBreaker) {
         await this.handleBreakerFailure(candidate, info.error, settings, now);
       }

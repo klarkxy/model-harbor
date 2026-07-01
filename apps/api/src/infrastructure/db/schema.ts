@@ -466,6 +466,9 @@ export const circuitBreakers = sqliteTable(
     openCount: integer('open_count').notNull().default(0),
     openedAt: integer('opened_at', { mode: 'timestamp_ms' }),
     cooldownUntil: integer('cooldown_until', { mode: 'timestamp_ms' }),
+    // LiteLLM 借鉴：per-candidate cooldown 失败率窗口计数。
+    cooldownFailureCount: integer('cooldown_failure_count').notNull().default(0),
+    cooldownFailureWindowStart: integer('cooldown_failure_window_start', { mode: 'timestamp_ms' }),
     lastErrorCode: text('last_error_code'),
     lastErrorMessage: text('last_error_message'),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),

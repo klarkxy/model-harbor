@@ -306,6 +306,105 @@ export class RoutingStateRepository {
     return result.length > 0;
   }
 
+  /**
+   * LiteLLM 借鉴：原子累加 per-candidate cooldown 失败窗口计数。
+   * - 仅在 breaker 处于 closed / half_open 时计数（open 状态不再累加）。
+   * - 若窗口为空或已过期，重置为 1 并记录新窗口起点。
+   * - 返回更新后的窗口内失败次数与窗口起点，供调用方判断是否触发 cooldown。
+   */
+  async incrementCooldownFailureAtomic(
+    providerAccountId: string,
+    endpointId: string,
+    realModelName: string,
+    windowMs: number,
+    now: Date,
+  ): Promise<{ count: number; windowStart: Date }> {
+    const nowMs = now.getTime();
+    const [updated] = await this.db
+      .update(circuitBreakers)
+      .set({
+        cooldownFailureCount: sql`
+          CASE
+            WHEN ${circuitBreakers.cooldownFailureWindowStart} IS NULL
+              OR ${nowMs} - ${circuitBreakers.cooldownFailureWindowStart} > ${windowMs}
+            THEN 1
+            ELSE ${circuitBreakers.cooldownFailureCount} + 1
+          END
+        `,
+        cooldownFailureWindowStart: sql`
+          CASE
+            WHEN ${circuitBreakers.cooldownFailureWindowStart} IS NULL
+              OR ${nowMs} - ${circuitBreakers.cooldownFailureWindowStart} > ${windowMs}
+            THEN ${nowMs}
+            ELSE ${circuitBreakers.cooldownFailureWindowStart}
+          END
+        `,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(circuitBreakers.providerAccountId, providerAccountId),
+          eq(circuitBreakers.endpointId, endpointId),
+          eq(circuitBreakers.realModelName, realModelName),
+          inArray(circuitBreakers.state, ['closed', 'half_open']),
+        ),
+      )
+      .returning({
+        cooldownFailureCount: circuitBreakers.cooldownFailureCount,
+        cooldownFailureWindowStart: circuitBreakers.cooldownFailureWindowStart,
+      });
+
+    if (updated) {
+      return {
+        count: updated.cooldownFailureCount,
+        windowStart: updated.cooldownFailureWindowStart as Date,
+      };
+    }
+
+    // 没有 closed/half_open 行：创建一条 closed 行用于记录 cooldown 窗口。
+    await this.upsertBreaker({
+      providerAccountId,
+      endpointId,
+      realModelName,
+      state: 'closed',
+      failureCount: 0,
+      successCount: 0,
+      openCount: 0,
+      cooldownUntil: null,
+      openedAt: null,
+      lastErrorCode: 'retriable_failure',
+      lastErrorMessage: 'cooldown window started',
+      cooldownFailureCount: 1,
+      cooldownFailureWindowStart: now,
+    });
+    return { count: 1, windowStart: now };
+  }
+
+  /**
+   * 当 candidate 成功响应时重置 cooldown 失败窗口，避免旧失败继续影响该 candidate。
+   */
+  async resetCooldownFailureWindow(
+    providerAccountId: string,
+    endpointId: string,
+    realModelName: string,
+    now: Date,
+  ): Promise<void> {
+    await this.db
+      .update(circuitBreakers)
+      .set({
+        cooldownFailureCount: 0,
+        cooldownFailureWindowStart: null,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(circuitBreakers.providerAccountId, providerAccountId),
+          eq(circuitBreakers.endpointId, endpointId),
+          eq(circuitBreakers.realModelName, realModelName),
+        ),
+      );
+  }
+
   async deleteStaleBreakers(at = new Date()): Promise<void> {
     // 收口 #6：删除条件只要求 state='open' AND cooldownUntil 已过期。
     // 之前同时要求 updatedAt < at-24h 的设计在生产中永远命中不了（每次
@@ -399,6 +498,8 @@ export class RoutingStateRepository {
         failureCount: 0,
         successCount: 0,
         cooldownUntil: null,
+        cooldownFailureCount: 0,
+        cooldownFailureWindowStart: null,
         lastErrorCode: null,
         lastErrorMessage: null,
         updatedAt: now,

@@ -1072,4 +1072,12 @@ export const MIGRATIONS: readonly Migration[] = [
       `CREATE INDEX IF NOT EXISTS request_trace_logs_client_key_idx ON request_trace_logs(client_key_id, created_at)`,
     ],
   },
+  {
+    version: 22,
+    statements: [
+      // LiteLLM 借鉴：per-candidate cooldown 失败率窗口计数。
+      `ALTER TABLE circuit_breakers ADD COLUMN cooldown_failure_count INTEGER NOT NULL DEFAULT 0`,
+      `ALTER TABLE circuit_breakers ADD COLUMN cooldown_failure_window_start INTEGER`,
+    ],
+  },
 ];
