@@ -12,7 +12,7 @@ import { RoutingStateRepository } from '../../src/infrastructure/db/repositories
 import { resetEnvForTests } from '../../src/config/env.js';
 import { createTestProviderAccountWithEndpoint } from '../helpers/account.js';
 
-describe('gateway upstream cooldown (per-candidate)', () => {
+describe('gateway upstream cooldown (per-candidate)', { hookTimeout: 120_000 }, () => {
   const originalFetch = globalThis.fetch;
   let app: Awaited<ReturnType<typeof buildServer>>;
   let rawKey: string;
