@@ -581,8 +581,9 @@
 - [x] 错误分类归一化：新增 `ProviderContextWindowExceededError` 与 `ProviderContentPolicyError`，并使其不 failover、不计入 cooldown。
   - 来源：LiteLLM `exception_mapping_utils.py`；Sub2API `ratelimit_service.go`。
   - 落地：2026-07-01 已实现于 `packages/shared/src/errors.ts`、`apps/api/src/gateway/providers/{openai,anthropic}-compatible.adapter.ts`、`apps/api/src/application/gateway-execution.service.ts`。
-- [ ] 建立错误类型 -> 路由行为映射表：明确每种错误是否 failover / cooldown。
+- [x] 建立错误类型 -> 路由行为映射表：明确每种错误是否 failover / cooldown。
   - 来源：LiteLLM `RetryPolicy`。
+  - 落地：2026-07-01 已实现 `getErrorRoutingBehavior()` 于 `packages/shared/src/errors.ts`，替换 `gateway-execution.service.ts` 的 `isRetriable` 与 `gateway-side-effects.service.ts` 的 `isRetriableFailure`。
 - [ ] Cooldown 时长算法：优先 `Retry-After`，否则指数退避 + jitter，上限 8s。
   - 来源：LiteLLM `_calculate_retry_after()`。
 - [ ] Cooldown 触发条件细化：429/401/408/404/5xx/网络错误触发；其他 4xx 不触发；单 candidate 失败率阈值触发而非首次失败即冷却。

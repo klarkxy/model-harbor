@@ -4,15 +4,20 @@ import {
   NoRouteAvailableError,
   NormalizedError,
   PermissionError,
+  ProviderAuthError,
+  ProviderBadRequestError,
   ProviderContentPolicyError,
   ProviderContextWindowExceededError,
   ProviderError,
+  ProviderModelNotFoundError,
+  ProviderOverloadedError,
   ProviderQuotaError,
   ProviderRateLimitError,
   ProviderStreamError,
   ProviderTimeoutError,
   TargetNotFoundError,
   ValidationError,
+  getErrorRoutingBehavior,
   isNormalizedError,
 } from './errors.js';
 
@@ -63,5 +68,81 @@ describe('NormalizedError', () => {
     expect(new ProviderStreamError().code).toBe('provider_stream_error');
     expect(new ProviderContextWindowExceededError().code).toBe('provider_context_window_exceeded');
     expect(new ProviderContentPolicyError().code).toBe('provider_content_policy');
+  });
+});
+
+describe('getErrorRoutingBehavior', () => {
+  it('context window / content policy: no failover, no cooldown', () => {
+    expect(getErrorRoutingBehavior(new ProviderContextWindowExceededError())).toEqual({
+      failover: false,
+      countTowardsCooldown: false,
+    });
+    expect(getErrorRoutingBehavior(new ProviderContentPolicyError())).toEqual({
+      failover: false,
+      countTowardsCooldown: false,
+    });
+  });
+
+  it('auth / bad_request / model_not_found: failover but no cooldown', () => {
+    expect(getErrorRoutingBehavior(new ProviderAuthError())).toEqual({
+      failover: true,
+      countTowardsCooldown: false,
+    });
+    expect(getErrorRoutingBehavior(new ProviderBadRequestError())).toEqual({
+      failover: true,
+      countTowardsCooldown: false,
+    });
+    expect(getErrorRoutingBehavior(new ProviderModelNotFoundError())).toEqual({
+      failover: true,
+      countTowardsCooldown: false,
+    });
+  });
+
+  it('stream error: failover but no cooldown', () => {
+    expect(getErrorRoutingBehavior(new ProviderStreamError())).toEqual({
+      failover: true,
+      countTowardsCooldown: false,
+    });
+  });
+
+  it('rate_limit / quota / overloaded / timeout: failover and cooldown', () => {
+    expect(getErrorRoutingBehavior(new ProviderRateLimitError())).toEqual({
+      failover: true,
+      countTowardsCooldown: true,
+    });
+    expect(getErrorRoutingBehavior(new ProviderQuotaError())).toEqual({
+      failover: true,
+      countTowardsCooldown: true,
+    });
+    expect(getErrorRoutingBehavior(new ProviderOverloadedError())).toEqual({
+      failover: true,
+      countTowardsCooldown: true,
+    });
+    expect(getErrorRoutingBehavior(new ProviderTimeoutError())).toEqual({
+      failover: true,
+      countTowardsCooldown: true,
+    });
+  });
+
+  it('ProviderError: failover; cooldown only for 5xx or network (no status)', () => {
+    expect(getErrorRoutingBehavior(new ProviderError('5xx', { status: 503 }))).toEqual({
+      failover: true,
+      countTowardsCooldown: true,
+    });
+    expect(getErrorRoutingBehavior(new ProviderError('network'))).toEqual({
+      failover: true,
+      countTowardsCooldown: true,
+    });
+    expect(getErrorRoutingBehavior(new ProviderError('4xx', { status: 418 }))).toEqual({
+      failover: true,
+      countTowardsCooldown: false,
+    });
+  });
+
+  it('non-provider NormalizedError: no failover, no cooldown', () => {
+    expect(getErrorRoutingBehavior(new NoRouteAvailableError())).toEqual({
+      failover: false,
+      countTowardsCooldown: false,
+    });
   });
 });

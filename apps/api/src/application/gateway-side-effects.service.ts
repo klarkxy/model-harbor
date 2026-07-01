@@ -15,7 +15,7 @@ import {
   usageRecords,
 } from '../infrastructure/db/schema.js';
 import { eq, and, count, asc, inArray } from 'drizzle-orm';
-import type { NormalizedError, ChatUsageIR } from '@manageyourllm/shared';
+import { getErrorRoutingBehavior, type NormalizedError, type ChatUsageIR } from '@manageyourllm/shared';
 import type { CandidateSnapshot } from './routing.types.js';
 import type { AdminSettingsRow, QuotaPeriod } from '../infrastructure/db/schema.js';
 
@@ -93,34 +93,12 @@ function periodBounds(
 /**
  * 决定一次上游失败是否应该计入 per-candidate cooldown 与 circuit breaker。
  *
- * v1 Phase 5：白名单形式，只有真正的"上游瞬时/容量问题"才计入——
- * - 429（rate_limit）
- * - 408 / abort（timeout）
- * - quota（上游返回 insufficient_quota）
- * - overloaded（529 或 code 字段含 overloaded / capacity）
- * - 5xx（server-side 上游故障，details.status >= 500；落 provider_error 类）
- *
- * bad_request（400/422）、auth（401/403）、model_not_found（404 + model）**不计入**，
- * 这些是请求侧或配置侧问题，不应该让上游 candidate 因此被熔断。
- * LiteLLM 借鉴：context_window_exceeded / content_policy 同样不计入 cooldown / breaker。
+ * LiteLLM 借鉴：行为收敛到 shared 的 `getErrorRoutingBehavior`，
+ * 避免与 `gateway-execution.service.ts` 的 `isRetriable` 各维护一份规则。
  */
 function isRetriableFailure(err: NormalizedError | undefined): err is NormalizedError {
   if (!err) return false;
-  if (err.code === 'provider_rate_limit') return true;
-  if (err.code === 'provider_quota_exhausted') return true;
-  if (err.code === 'provider_timeout') return true;
-  if (err.code === 'provider_overloaded') return true;
-  if (err.code === 'provider_error') {
-    // provider_error 覆盖两类：
-    // 1. 上游返回 5xx（HTTP 状态码已知）
-    // 2. 网络/transport 错误（无 HTTP 状态码 → details.status 缺失），
-    //    由 `toNormalizedError` 把原生 Error（DNS / ECONNREFUSED / TLS）包成裸 ProviderError。
-    // 没有 status 时视为可重试（network-level transient），避免上游不可达时不进 cooldown。
-    const status = err.details?.['status'] as number | undefined;
-    if (status === undefined) return true;
-    return status >= 500;
-  }
-  return false;
+  return getErrorRoutingBehavior(err).countTowardsCooldown;
 }
 
 export class GatewaySideEffectsService {

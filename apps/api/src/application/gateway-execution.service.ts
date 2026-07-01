@@ -2,17 +2,9 @@ import {
   isNormalizedError,
   NoRouteAvailableError,
   PermissionError,
-  ProviderAuthError,
-  ProviderBadRequestError,
-  ProviderContentPolicyError,
-  ProviderContextWindowExceededError,
   ProviderError,
-  ProviderModelNotFoundError,
-  ProviderOverloadedError,
-  ProviderQuotaError,
-  ProviderRateLimitError,
-  ProviderStreamError,
   ProviderTimeoutError,
+  getErrorRoutingBehavior,
   type ChatRequestIR,
   type NormalizedChatResponse,
   type NormalizedError,
@@ -78,32 +70,11 @@ function toNormalizedError(err: unknown): NormalizedError {
 }
 
 function isRetriable(err: NormalizedError): boolean {
-  // LiteLLM 借鉴：context window 超限 / content policy 违规属于请求侧问题，
-  // 换 candidate 不会改善，因此不 failover。
-  if (
-    err instanceof ProviderContextWindowExceededError ||
-    err instanceof ProviderContentPolicyError
-  ) {
-    return false;
-  }
-  // 网关 attempt 层对多数归一化的 provider-side error 继续尝试后续候选——
-  // 包括 4xx（auth/bad_request/model_not_found）和 5xx；
-  // 排除 context_window_exceeded / content_policy。
-  // v1 Phase 5：错误分类细化后，4xx 不再计入 cooldown / breaker（见
-  // gateway-side-effects.service.ts 的 isRetriableFailure），但仍允许 attempt
-  // 层继续尝试下一个候选（下一个 candidate 可能成功）。
-  return (
-    err instanceof ProviderError ||
-    err instanceof ProviderAuthError ||
-    err instanceof ProviderBadRequestError ||
-    err instanceof ProviderModelNotFoundError ||
-    err instanceof ProviderOverloadedError ||
-    err instanceof ProviderRateLimitError ||
-    err instanceof ProviderQuotaError ||
-    err instanceof ProviderTimeoutError ||
-    err instanceof ProviderStreamError
-  );
+  // LiteLLM 借鉴：错误类型 -> 路由行为映射表统一收敛到 shared 的
+  // getErrorRoutingBehavior，避免 gateway-execution 与 gateway-side-effects 各写一份。
+  return getErrorRoutingBehavior(err).failover;
 }
+
 
 interface ExecutionPrepareResult {
   resolved: Awaited<ReturnType<TargetResolutionService['resolve']>>;

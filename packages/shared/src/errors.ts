@@ -161,6 +161,77 @@ export class ProviderContentPolicyError extends NormalizedError {
   }
 }
 
+/**
+ * 错误在网关路由层的行为策略。
+ *
+ * 把原本散落在 `isRetriable` / `isRetriableFailure` 里的 instanceof / code 判断
+ * 集中到这里，方便统一调整，也为后续按 provider / endpoint 覆盖策略留扩展点。
+ */
+export interface ErrorRoutingBehavior {
+  /** 失败后是否继续尝试下一个 candidate */
+  failover: boolean;
+  /** 失败后是否计入 per-candidate cooldown / breaker */
+  countTowardsCooldown: boolean;
+}
+
+/**
+ * 根据归一化错误类型返回路由行为。
+ *
+ * 规则（按优先级从高到低）：
+ * 1. context_window_exceeded / content_policy：请求侧错误，不 failover、不计 cooldown。
+ * 2. stream_error：流式解析失败，允许 failover（换候选可能恢复），但不计 cooldown。
+ * 3. auth / bad_request / model_not_found：配置/权限/请求侧错误，允许 failover（下一候选可能成功），但不计 cooldown。
+ * 4. rate_limit / quota / overloaded / timeout：上游瞬时/容量问题，允许 failover 且计 cooldown。
+ * 5. ProviderError（5xx / 网络错误）：允许 failover；计 cooldown 当且仅当上游 HTTP status >= 500 或没有 status（网络层）。
+ * 6. 其他 NormalizedError：兜底为不 failover、不计 cooldown。
+ */
+export function getErrorRoutingBehavior(err: NormalizedError): ErrorRoutingBehavior {
+  // 1. 请求侧不可恢复错误
+  if (
+    err instanceof ProviderContextWindowExceededError ||
+    err instanceof ProviderContentPolicyError
+  ) {
+    return { failover: false, countTowardsCooldown: false };
+  }
+
+  // 2. 流式解析错误：换 candidate 可能恢复，但本身不是上游容量问题
+  if (err instanceof ProviderStreamError) {
+    return { failover: true, countTowardsCooldown: false };
+  }
+
+  // 3. 配置/权限/请求侧错误：当前 candidate 失败，但其他 candidate 可能成功
+  if (
+    err instanceof ProviderAuthError ||
+    err instanceof ProviderBadRequestError ||
+    err instanceof ProviderModelNotFoundError
+  ) {
+    return { failover: true, countTowardsCooldown: false };
+  }
+
+  // 4. 上游瞬时/容量错误
+  if (
+    err instanceof ProviderRateLimitError ||
+    err instanceof ProviderQuotaError ||
+    err instanceof ProviderOverloadedError ||
+    err instanceof ProviderTimeoutError
+  ) {
+    return { failover: true, countTowardsCooldown: true };
+  }
+
+  // 5. 通用 ProviderError：5xx 或网络/transport 错误
+  if (err instanceof ProviderError) {
+    const status = err.details?.['status'] as number | undefined;
+    // 没有 status 时视为网络层瞬态错误（DNS / ECONNREFUSED / TLS 等）
+    if (status === undefined) {
+      return { failover: true, countTowardsCooldown: true };
+    }
+    return { failover: true, countTowardsCooldown: status >= 500 };
+  }
+
+  // 6. 兜底：其他 NormalizedError（如 NoRouteAvailableError）不 failover、不计 cooldown
+  return { failover: false, countTowardsCooldown: false };
+}
+
 export function isNormalizedError(err: unknown): err is NormalizedError {
   return err instanceof NormalizedError;
 }
