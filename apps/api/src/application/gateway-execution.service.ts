@@ -428,6 +428,7 @@ export class GatewayExecutionService {
         providerAccount: candidate.providerAccount,
         realModelName: candidate.realModelName,
         status: upstreamResponse.status,
+        headers: upstreamResponse.headers,
         body: upstreamResponse.body,
       });
 
@@ -520,6 +521,7 @@ export class GatewayExecutionService {
           providerAccount: candidate.providerAccount,
           realModelName: candidate.realModelName,
           status: upstreamResponse.status,
+          headers: upstreamResponse.headers,
           body: upstreamResponse.body,
         });
         await recordStreamEvent('stream_error', 2003, 'fail', {

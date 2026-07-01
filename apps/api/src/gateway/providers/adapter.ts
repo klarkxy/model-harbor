@@ -26,6 +26,7 @@ export interface NormalizeErrorContext {
   providerAccount: ProviderAccountRow;
   realModelName: string;
   status: number;
+  headers: Record<string, string>;
   body: unknown;
 }
 

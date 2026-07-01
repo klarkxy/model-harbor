@@ -22,6 +22,7 @@ export interface UpstreamStreamSuccessResponse {
 export interface UpstreamStreamErrorResponse {
   ok: false;
   status: number;
+  headers: Record<string, string>;
   body: unknown;
 }
 
@@ -111,7 +112,7 @@ export class UpstreamSender {
             body = text;
           }
         }
-        return { ok: false, status: res.status, body };
+        return { ok: false, status: res.status, headers, body };
       }
 
       const body = this.applyFirstTokenTimeout(res.body, controller, request.firstTokenTimeoutMs);

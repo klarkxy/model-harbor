@@ -584,8 +584,9 @@
 - [x] 建立错误类型 -> 路由行为映射表：明确每种错误是否 failover / cooldown。
   - 来源：LiteLLM `RetryPolicy`。
   - 落地：2026-07-01 已实现 `getErrorRoutingBehavior()` 于 `packages/shared/src/errors.ts`，替换 `gateway-execution.service.ts` 的 `isRetriable` 与 `gateway-side-effects.service.ts` 的 `isRetriableFailure`。
-- [ ] Cooldown 时长算法：优先 `Retry-After`，否则指数退避 + jitter，上限 8s。
+- [x] Cooldown 时长算法：优先 `Retry-After`，否则指数退避 + jitter，上限 8s。
   - 来源：LiteLLM `_calculate_retry_after()`。
+  - 落地：2026-07-01 已实现 `CooldownCalculator`（base=1s / max=8s / ±25% jitter），`Retry-After` 由 adapter 解析后写入 error.details.retryAfterMs；替换 `gateway-side-effects.service.ts` 的 `setCandidateCooldown`。
 - [ ] Cooldown 触发条件细化：429/401/408/404/5xx/网络错误触发；其他 4xx 不触发；单 candidate 失败率阈值触发而非首次失败即冷却。
   - 来源：LiteLLM `cooldown_handlers.py`。
 - [ ] Sticky Session 粘性逃逸：命中 sticky binding 后，若 candidate 被过滤（cooldown/breaker/过载），允许跳出并记录 `sticky_escape`。

@@ -7,6 +7,7 @@ import { EndpointHealthRepository } from '../infrastructure/db/repositories/endp
 import { CostLedgerService } from './cost-ledger.service.js';
 import { SettingsService } from './settings.service.js';
 import { redactAndTruncate } from '../domain/observability/content-log-redaction.js';
+import { CooldownCalculator } from '../domain/gateway/cooldown-calculator.js';
 import { ObservabilityRepository } from '../infrastructure/db/repositories/observability.repository.js';
 import {
   dailyConsumptionStats,
@@ -106,12 +107,17 @@ export class GatewaySideEffectsService {
   private readonly providerAccountRepo: ProviderAccountRepository;
   private readonly endpointHealthRepo: EndpointHealthRepository;
   private readonly costLedgerService: CostLedgerService;
+  private readonly cooldownCalculator: CooldownCalculator;
 
-  constructor(private readonly db: Db) {
+  constructor(
+    private readonly db: Db,
+    deps?: { cooldownCalculator?: CooldownCalculator },
+  ) {
     this.routingStateRepo = new RoutingStateRepository(db);
     this.providerAccountRepo = new ProviderAccountRepository(db);
     this.endpointHealthRepo = new EndpointHealthRepository(db);
     this.costLedgerService = new CostLedgerService(db);
+    this.cooldownCalculator = deps?.cooldownCalculator ?? new CooldownCalculator();
   }
 
   async recordDebugContent(
@@ -266,7 +272,7 @@ export class GatewaySideEffectsService {
       // 收口 #2：每个 retriable 失败立即叠加 per-candidate 指数退避，与熔断器阈值独立。
       // 即便熔断器关闭或未达阈值，broken upstream 也会在 (base, base*2, base*4, ...) 上冷却，
       // 防止前 (threshold-1) 次失败毫无间隔地重击 upstream。
-      await this.setCandidateCooldown(base, candidate, settings, now);
+      await this.setCandidateCooldown(base, candidate, info.error, settings, now);
       if (settings.enableCircuitBreaker) {
         await this.handleBreakerFailure(candidate, info.error, settings, now);
       }
@@ -547,34 +553,29 @@ export class GatewaySideEffectsService {
   }
 
   /**
-   * 收口 #2：每个 retriable 失败都叠加 per-candidate 指数退避。
+   * 收口 #2：每个 retriable 失败叠加 per-candidate cooldown。
    * 实现：在 circuit_breakers 同一行上记录 candidate 级 cooldownUntil，与熔断器独立。
    * 路由层（filter_breaker_open / filter_cooldown）已会读该字段把处于 cooldown 的 candidate 过滤掉。
-   * 这里要避免与熔断器本身的 cooldownUntil 冲突：写之前先读，若 breaker 已 open 且其
-   * cooldownUntil 仍在未来，则不缩短；若没有 or 已过期则取 max(当前剩余 * 2, base)。
+   *
+   * LiteLLM 借鉴：cooldown 时长优先取 Retry-After，否则指数退避 + jitter，封顶 8s。
    */
   private async setCandidateCooldown(
     base: ExecutionBaseInfo,
     candidate: CandidateSnapshot,
+    error: NormalizedError,
     settings: AdminSettingsRow,
     now: Date,
   ): Promise<void> {
-    const baseMs = settings.circuitBreakerBaseCooldownMs;
-    const maxMs = settings.circuitBreakerMaxCooldownMs;
     const existing = await this.routingStateRepo.findBreaker(
       candidate.providerAccount.id,
       candidate.endpoint.id,
       candidate.realModelName,
     );
-    let nextDurationMs: number;
-    if (existing?.cooldownUntil && existing.cooldownUntil > now) {
-      // 仍在冷却中：指数退避（翻倍），封顶 maxMs。
-      const remaining = existing.cooldownUntil.getTime() - now.getTime();
-      nextDurationMs = Math.min(remaining * 2, maxMs);
-    } else {
-      // 全新失败 / 已过冷却：基数。
-      nextDurationMs = baseMs;
-    }
+    const nextDurationMs = this.cooldownCalculator.calculate(
+      error,
+      existing?.cooldownUntil ?? null,
+      now,
+    );
     const cooldownUntil = new Date(now.getTime() + nextDurationMs);
 
     if (existing) {

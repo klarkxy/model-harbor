@@ -25,6 +25,7 @@ import type {
   ProviderHttpRequest,
   ProviderAdapter,
 } from './adapter.js';
+import { parseRetryAfterHeader } from '../retry-after.js';
 
 function buildMessagesBody(ir: ChatRequestIR, realModelName: string): AnthropicMessagesRequest {
   const messages = ir.messages.map((msg) => ({
@@ -130,12 +131,13 @@ export class AnthropicCompatibleAdapter implements ProviderAdapter {
   }
 
   normalizeError(ctx: NormalizeErrorContext): NormalizedError {
-    const { status, body } = ctx;
+    const { status, headers, body } = ctx;
     const { message, code } = normalizeErrorBody(status, body);
-    if (status === 429) return new ProviderRateLimitError(message, { code });
-    if (status === 408) return new ProviderTimeoutError(message, { code });
+    const retryAfterMs = parseRetryAfterHeader(headers?.['retry-after'] ?? headers?.['Retry-After']);
+    if (status === 429) return new ProviderRateLimitError(message, { code, status, retryAfterMs });
+    if (status === 408) return new ProviderTimeoutError(message, { code, status, retryAfterMs });
     if (code?.includes('quota') || code?.includes('rate_limit')) {
-      return new ProviderQuotaError(message, { code });
+      return new ProviderQuotaError(message, { code, status, retryAfterMs });
     }
     // v1 Phase 5：错误分类细化，4xx 不再全部归 provider_error。
     // Anthropic 错误 type 形如 'authentication_error' / 'permission_error' / 'not_found_error' 等。
@@ -151,7 +153,7 @@ export class AnthropicCompatibleAdapter implements ProviderAdapter {
       messageLower.includes('token limit') ||
       messageLower.includes('maximum length')
     ) {
-      return new ProviderContextWindowExceededError(message, { code, status });
+      return new ProviderContextWindowExceededError(message, { code, status, retryAfterMs });
     }
     if (
       codeLower.includes('content_policy') ||
@@ -161,27 +163,27 @@ export class AnthropicCompatibleAdapter implements ProviderAdapter {
       messageLower.includes('safety') ||
       messageLower.includes('policy violation')
     ) {
-      return new ProviderContentPolicyError(message, { code, status });
+      return new ProviderContentPolicyError(message, { code, status, retryAfterMs });
     }
     if (status === 401 || status === 403) {
-      return new ProviderAuthError(message, { code, status });
+      return new ProviderAuthError(message, { code, status, retryAfterMs });
     }
     if (codeLower.includes('permission') || codeLower.includes('authentication')) {
-      return new ProviderAuthError(message, { code, status });
+      return new ProviderAuthError(message, { code, status, retryAfterMs });
     }
     if (status === 404 || codeLower.includes('not_found')) {
       if (codeLower.includes('model') || /model/i.test(message)) {
-        return new ProviderModelNotFoundError(message, { code, status });
+        return new ProviderModelNotFoundError(message, { code, status, retryAfterMs });
       }
-      return new ProviderBadRequestError(message, { code, status });
+      return new ProviderBadRequestError(message, { code, status, retryAfterMs });
     }
     if (status === 400 || status === 422 || codeLower.includes('invalid_request')) {
-      return new ProviderBadRequestError(message, { code, status });
+      return new ProviderBadRequestError(message, { code, status, retryAfterMs });
     }
     if (status === 529 || codeLower.includes('overloaded') || codeLower.includes('capacity')) {
-      return new ProviderOverloadedError(message, { code, status });
+      return new ProviderOverloadedError(message, { code, status, retryAfterMs });
     }
-    return new ProviderError(message, { code, status });
+    return new ProviderError(message, { code, status, retryAfterMs });
   }
 
   supportsStreaming(sourceProtocol: SourceProtocol, endpointProtocol: SourceProtocol): boolean {

@@ -27,6 +27,7 @@ import type {
   ProviderHttpRequest,
   ProviderAdapter,
 } from './adapter.js';
+import { parseRetryAfterHeader } from '../retry-after.js';
 
 function buildChatCompletionBody(ir: ChatRequestIR): Record<string, unknown> {
   const messages: OpenAIChatMessage[] = [];
@@ -172,12 +173,13 @@ export class OpenAICompatibleAdapter implements ProviderAdapter {
   }
 
   normalizeError(ctx: NormalizeErrorContext): NormalizedError {
-    const { status, body } = ctx;
+    const { status, headers, body } = ctx;
     const { message, code } = normalizeErrorBody(status, body);
-    if (status === 429) return new ProviderRateLimitError(message, { code });
-    if (status === 408) return new ProviderTimeoutError(message, { code });
+    const retryAfterMs = parseRetryAfterHeader(headers?.['retry-after'] ?? headers?.['Retry-After']);
+    if (status === 429) return new ProviderRateLimitError(message, { code, status, retryAfterMs });
+    if (status === 408) return new ProviderTimeoutError(message, { code, status, retryAfterMs });
     if (code === 'insufficient_quota' || code === 'quota_exceeded') {
-      return new ProviderQuotaError(message, { code });
+      return new ProviderQuotaError(message, { code, status, retryAfterMs });
     }
     // v1 Phase 5：错误分类细化，4xx 不再全部归 provider_error。
     // LiteLLM 借鉴：context window / content policy 属于请求侧错误，不归 provider_error。
@@ -192,7 +194,7 @@ export class OpenAICompatibleAdapter implements ProviderAdapter {
       messageLower.includes('maximum context length') ||
       messageLower.includes('tokens') && messageLower.includes('limit')
     ) {
-      return new ProviderContextWindowExceededError(message, { code, status });
+      return new ProviderContextWindowExceededError(message, { code, status, retryAfterMs });
     }
     if (
       codeLower.includes('content_filter') ||
@@ -203,19 +205,20 @@ export class OpenAICompatibleAdapter implements ProviderAdapter {
       messageLower.includes('content filter') ||
       messageLower.includes('moderation')
     ) {
-      return new ProviderContentPolicyError(message, { code, status });
+      return new ProviderContentPolicyError(message, { code, status, retryAfterMs });
     }
-    if (status === 401 || status === 403) return new ProviderAuthError(message, { code, status });
+    if (status === 401 || status === 403)
+      return new ProviderAuthError(message, { code, status, retryAfterMs });
     if (status === 404) {
       // 404 但 code 明显指 model 而不是端点路径，认作 model_not_found；
       // 否则仍按 4xx 兜底为 bad_request，让 Trace 提示路径配置风险。
       if (typeof code === 'string' && /model/i.test(code)) {
-        return new ProviderModelNotFoundError(message, { code, status });
+        return new ProviderModelNotFoundError(message, { code, status, retryAfterMs });
       }
-      return new ProviderBadRequestError(message, { code, status });
+      return new ProviderBadRequestError(message, { code, status, retryAfterMs });
     }
     if (status === 400 || status === 422)
-      return new ProviderBadRequestError(message, { code, status });
+      return new ProviderBadRequestError(message, { code, status, retryAfterMs });
     // 5xx / 其他：归 ProviderError，保留计入 cooldown / breaker 的语义。
     // overloaded（529 或 code 字段含 overloaded / capacity）单独归类便于排障，
     // 也保留计入 cooldown。
@@ -223,9 +226,9 @@ export class OpenAICompatibleAdapter implements ProviderAdapter {
       status === 529 ||
       (typeof code === 'string' && (/overloaded/i.test(code) || /capacity/i.test(code)))
     ) {
-      return new ProviderOverloadedError(message, { code, status });
+      return new ProviderOverloadedError(message, { code, status, retryAfterMs });
     }
-    return new ProviderError(message, { code, status });
+    return new ProviderError(message, { code, status, retryAfterMs });
   }
 
   supportsStreaming(sourceProtocol: SourceProtocol, endpointProtocol: SourceProtocol): boolean {

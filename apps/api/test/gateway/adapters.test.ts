@@ -207,11 +207,26 @@ describe('OpenAICompatibleAdapter', () => {
       providerAccount: makeProviderAccount('openai_compatible'),
       realModelName: 'real',
       status: 429,
+      headers: {},
       body: { error: { message: 'Rate limited', code: 'rate_limit_exceeded' } },
     };
     const err = adapter.normalizeError(ctx);
     expect(err).toBeInstanceOf(ProviderRateLimitError);
     expect(err.message).toBe('Rate limited');
+  });
+
+  it('parses Retry-After header into error details', () => {
+    const adapter = new OpenAICompatibleAdapter();
+    const ctx: NormalizeErrorContext = {
+      providerAccount: makeProviderAccount('openai_compatible'),
+      realModelName: 'real',
+      status: 429,
+      headers: { 'retry-after': '5' },
+      body: { error: { message: 'Rate limited', code: 'rate_limit_exceeded' } },
+    };
+    const err = adapter.normalizeError(ctx);
+    expect(err).toBeInstanceOf(ProviderRateLimitError);
+    expect(err.details?.retryAfterMs).toBe(5_000);
   });
 
   it('normalizes quota error by code', () => {
@@ -220,6 +235,7 @@ describe('OpenAICompatibleAdapter', () => {
       providerAccount: makeProviderAccount('openai_compatible'),
       realModelName: 'real',
       status: 400,
+      headers: {},
       body: { error: { message: 'No quota', code: 'insufficient_quota' } },
     };
     const err = adapter.normalizeError(ctx);
@@ -232,6 +248,7 @@ describe('OpenAICompatibleAdapter', () => {
       providerAccount: makeProviderAccount('openai_compatible'),
       realModelName: 'real',
       status: 500,
+      headers: {},
       body: { error: { message: 'Boom' } },
     };
     const err = adapter.normalizeError(ctx);
@@ -343,6 +360,7 @@ describe('AnthropicCompatibleAdapter', () => {
       providerAccount: makeProviderAccount('anthropic_compatible'),
       realModelName: 'claude-3',
       status: 429,
+      headers: {},
       body: { error: { type: 'rate_limit_error', message: 'Too fast' } },
     };
     const err = adapter.normalizeError(ctx);
@@ -356,6 +374,7 @@ describe('AnthropicCompatibleAdapter', () => {
       providerAccount: makeProviderAccount('anthropic_compatible'),
       realModelName: 'claude-3',
       status: 400,
+      headers: {},
       body: { error: { type: 'quota_exceeded', message: 'Over quota' } },
     };
     const err = adapter.normalizeError(ctx);
@@ -368,6 +387,7 @@ describe('AnthropicCompatibleAdapter', () => {
       providerAccount: makeProviderAccount('anthropic_compatible'),
       realModelName: 'claude-3',
       status: 408,
+      headers: {},
       body: {},
     };
     const err = adapter.normalizeError(ctx);
